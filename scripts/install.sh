@@ -22,30 +22,62 @@ log() { printf '\033[1;34m==>\033[0m %s\n' "$*"; }
 warn() { printf '\033[1;33mwarn:\033[0m %s\n' "$*" >&2; }
 die() { printf '\033[1;31merror:\033[0m %s\n' "$*" >&2; exit 1; }
 
-# --- 1. Go toolchain ---------------------------------------------------------
-command -v go >/dev/null 2>&1 || die "Go not found on PATH. On the fleet run 'rebuild'; otherwise install from https://go.dev/dl/ (1.21+; GOTOOLCHAIN=auto fetches the rest)."
-
-# --- 2. Install the binary ---------------------------------------------------
+OWNER_REPO="ngpestelos/pagasa-pp-cli"
 mkdir -p "$GOBIN_DIR"
-log "Installing $BIN to $GOBIN_DIR (go install ${MODULE}/cmd/${BIN}@latest)"
-# A brand-new public module can 500 on sum.golang.org while the checksum DB
-# indexes it; retry a few times before giving up.
+
+# --- 1. Prefer the prebuilt release binary (no local compile) ----------------
+# Compiling modernc.org/sqlite is CPU-heavy — never do it on a small VPS that's
+# also running services. Download the CI-built binary instead; fall back to
+# `go install` only if the download can't be resolved.
+os="$(uname -s | tr '[:upper:]' '[:lower:]')"
+case "$(uname -m)" in
+  x86_64|amd64) arch=amd64 ;;
+  aarch64|arm64) arch=arm64 ;;
+  *) arch="" ;;
+esac
+
 install_ok=false
-for attempt in 1 2 3; do
-  if GOTOOLCHAIN=auto GOBIN="$GOBIN_DIR" go install "${MODULE}/cmd/${BIN}@latest" 2>/tmp/pagasa-install.err; then
-    install_ok=true
-    break
+if [ -n "$arch" ] && command -v curl >/dev/null 2>&1; then
+  # Resolve the latest release tag (public repo, no auth needed).
+  ver="$(curl -fsSL "https://api.github.com/repos/${OWNER_REPO}/releases/latest" 2>/dev/null \
+    | sed -n 's/.*"tag_name": *"v\{0,1\}\([^"]*\)".*/\1/p' | head -1)"
+  if [ -n "$ver" ]; then
+    tarball="pagasa-pp-cli_${ver}_${os}_${arch}.tar.gz"
+    url="https://github.com/${OWNER_REPO}/releases/download/v${ver}/${tarball}"
+    log "Downloading prebuilt $BIN v$ver ($os/$arch)"
+    tmp="$(mktemp -d)"
+    if curl -fsSL "$url" -o "$tmp/$tarball" 2>/dev/null && tar -xzf "$tmp/$tarball" -C "$GOBIN_DIR" 2>/dev/null; then
+      chmod +x "$GOBIN_DIR/pagasa-pp-cli" "$GOBIN_DIR/pagasa-pp-mcp" 2>/dev/null || true
+      install_ok=true
+    else
+      warn "prebuilt download failed ($url); will try building from source."
+    fi
+    rm -rf "$tmp"
   fi
-  if grep -q "sum.golang.org" /tmp/pagasa-install.err 2>/dev/null; then
-    warn "checksum DB not ready (attempt $attempt/3); retrying in 10s"
-    sleep 10
-  else
-    cat /tmp/pagasa-install.err >&2
-    break
-  fi
-done
-rm -f /tmp/pagasa-install.err
-[ "$install_ok" = true ] || die "go install failed. See the error above."
+fi
+
+# --- 2. Fallback: build from source (go install) -----------------------------
+if [ "$install_ok" != true ]; then
+  command -v go >/dev/null 2>&1 || die "No prebuilt binary available and Go not on PATH. Install Go 1.21+ (https://go.dev/dl/) or check the release assets."
+  warn "Building from source — this compiles modernc.org/sqlite and is CPU-heavy."
+  # A brand-new public module can 500 on sum.golang.org while the checksum DB
+  # indexes it; retry a few times before giving up.
+  for attempt in 1 2 3; do
+    if GOTOOLCHAIN=auto GOBIN="$GOBIN_DIR" go install "${MODULE}/cmd/${BIN}@latest" 2>/tmp/pagasa-install.err; then
+      install_ok=true
+      break
+    fi
+    if grep -q "sum.golang.org" /tmp/pagasa-install.err 2>/dev/null; then
+      warn "checksum DB not ready (attempt $attempt/3); retrying in 10s"
+      sleep 10
+    else
+      cat /tmp/pagasa-install.err >&2
+      break
+    fi
+  done
+  rm -f /tmp/pagasa-install.err
+fi
+[ "$install_ok" = true ] || die "install failed (neither prebuilt download nor go install worked)."
 
 # --- 3. Verify ---------------------------------------------------------------
 BIN_PATH="$GOBIN_DIR/$BIN"
