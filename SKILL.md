@@ -20,20 +20,13 @@ metadata:
 
 ## Prerequisites: Install the CLI
 
-This skill drives the `pagasa-pp-cli` binary. **You must verify the CLI is installed before invoking any command from this skill.** If it is missing, install it first:
-
-1. Install via the Printing Press installer. It defaults binaries to `$HOME/.local/bin` on macOS/Linux and `%LOCALAPPDATA%\Programs\PrintingPress\bin` on Windows:
-   ```bash
-   npx -y @mvanhorn/printing-press-library install pagasa --cli-only
-   ```
-2. Verify: `pagasa-pp-cli --version`
-3. Ensure the reported install directory is on `$PATH` for the agent/runtime that will invoke this skill.
-
-If the `npx` install fails (no Node, offline, etc.), fall back to a direct Go install (requires Go 1.26.5 or newer). This installs into `$GOPATH/bin` (default `$HOME/go/bin`), so add that directory to `$PATH` instead:
+This skill drives the `pagasa-pp-cli` binary. **You must verify the CLI is installed before invoking any command from this skill.** If it is missing, install it via Go (requires Go 1.26.5 or newer; set `GOTOOLCHAIN=auto` to let an older Go auto-fetch the required toolchain):
 
 ```bash
 go install github.com/ngpestelos/pagasa-pp-cli/cmd/pagasa-pp-cli@latest
 ```
+
+This installs into `$GOPATH/bin` (default `$HOME/go/bin`) — ensure that directory is on `$PATH` for the agent/runtime that will invoke this skill. Then verify: `pagasa-pp-cli --version`.
 
 If `--version` reports "command not found" after install, the runtime cannot see the binary directory on `$PATH`. Do not proceed with skill commands until verification succeeds.
 
