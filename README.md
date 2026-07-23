@@ -1,0 +1,97 @@
+# PAGASA CLI
+
+**Every PAGASA public weather surface as one agent-native CLI — synopsis, city forecast, and live cyclone signals, with a local history no PAGASA page keeps.**
+
+PAGASA serves only the latest forecast as server-rendered HTML. `pagasa-pp-cli` extracts the synopsis, per-city 5-day forecasts, and active tropical-cyclone bulletins into structured JSON, links the bulletin PDFs and wind-signal maps from pubfiles, and mirrors each reading into a local SQLite store so you can query history and forecast drift offline. Table output in a terminal, JSON when piped — built for both humans and agents.
+
+Created by [Nestor G Pestelos Jr](https://npestelos.com).
+
+> **Unofficial.** This is an independent, community-built tool and is **not affiliated with, endorsed by, or supported by PAGASA or DOST**. It extracts publicly available data from the PAGASA website's HTML; the site's structure can change at any time and break extraction without notice. For official, authoritative forecasts and warnings, always consult [pagasa.dost.gov.ph](https://www.pagasa.dost.gov.ph) directly — **never rely on this tool for life-safety decisions**. Review PAGASA's terms of use before deploying automated access, and use a courteous request rate. The official [PAGASA TenDay JSON API](https://tenday.pagasa.dost.gov.ph) requires a token issued by PAGASA and is **not** used by this tool.
+
+## Install
+
+Requires [Go 1.26.5 or newer](https://go.dev/dl/):
+
+```bash
+go install github.com/ngpestelos/pagasa-pp-cli/cmd/pagasa-pp-cli@latest
+```
+
+The binary installs to `$(go env GOPATH)/bin` (usually `~/go/bin`); make sure that's on your `PATH`.
+
+An MCP server binary is also available for IDE/desktop agents:
+
+```bash
+go install github.com/ngpestelos/pagasa-pp-cli/cmd/pagasa-pp-mcp@latest
+```
+
+## Quick Start
+
+```bash
+# current synopsis + active storm (KIYAPO, position, movement)
+pagasa-pp-cli now
+
+# 5-day forecast for one city (temp range + rain chance + condition)
+pagasa-pp-cli forecast --city "Metro Manila"
+
+# active cyclone: synopsis + downloadable bulletin PDFs + signal map
+pagasa-pp-cli storm --json
+
+# how far is the storm from a point? (Mandaluyong shown)
+pagasa-pp-cli approach --location 14.58,121.03
+
+# is a wind signal in effect for my locality?
+pagasa-pp-cli watch --area Mandaluyong
+```
+
+Add `--json` (or `--agent`) to any command for machine output; output is auto-JSON when piped.
+
+## Commands
+
+| Command | What it does |
+|---------|--------------|
+| `now` | Current synopsis and active tropical cyclone (name, category, issuance time). |
+| `forecast --city <name>` | 5-day forecast for a selected city. `--list-cities` shows the 18 valid names; `--city` matches on a case-insensitive substring. |
+| `storm` | Active cyclone: synopsis + bulletin PDF links + wind-signal map. Reports `active:false` when none is tracked. |
+| `approach --location "lat,lon"` | Great-circle distance from a fixed point to the storm center parsed from the synopsis. |
+| `watch --area <name>` | Whether a wind signal is relevant to a locality, with an honest "clear" state when no cyclone is active. Per-area signal numbers live only in the bulletin PDF, so this links the official signal map rather than fabricating a level. |
+| `digest --city <name>` | Synopsis + a city's forecast + active-storm bulletins in one payload. Persists a local snapshot. |
+| `history` | Past synopsis/cyclone snapshots recorded locally (PAGASA serves only the latest). Empty until you've run `digest`/`now`/`storm` over time. |
+| `drift --city <name>` | How a city's forecast changed across recorded snapshots. Needs at least two snapshots for the city. |
+
+Run `pagasa-pp-cli --help` for the full command tree, including the raw page-extraction commands (`weather`, `climate`, `tropical-cyclone`) and the local-store utilities.
+
+## How it works
+
+- **`www.pagasa.dost.gov.ph`** — server-rendered HTML. The synopsis lives in a `panel-body`; each of 18 cities is an accordion panel with a day-by-day forecast table; the severe-weather-bulletin page links the current cyclone's artifacts. The `internal/pagasa` package parses these into typed Go values (with tests).
+- **`pubfiles.pagasa.dost.gov.ph`** — the bulletin PDFs and wind-signal PNGs, served over plain HTTP.
+- **Local SQLite mirror** — `now`, `storm`, and `digest` persist a snapshot each run, which `history` and `drift` read back. Nothing leaves your machine.
+
+HTML extraction is inherently brittle: if PAGASA restructures a page, the matching extractor can break until updated. That's the trade-off for a site with no official public JSON API.
+
+## Output & flags
+
+Agent-native flags on every command: `--json`, `--select <fields>`, `--compact`, `--csv`, `--quiet`, `--dry-run`, `--agent`. Typed exit codes let agents self-correct without parsing error text.
+
+```bash
+pagasa-pp-cli forecast --city manila --json --select city,days
+pagasa-pp-cli now --agent          # JSON + non-interactive in one flag
+pagasa-pp-cli storm --dry-run      # show what would be fetched, no request
+```
+
+## Development
+
+```bash
+go build ./...
+go test ./...
+go vet ./...
+```
+
+CI (build, vet, test, govulncheck) runs on every push and PR. Dependabot keeps Go modules and Actions current.
+
+## Sources & inspiration
+
+Prior art in the Philippine-weather ecosystem: [pagasa-parser](https://github.com/pagasa-parser) (TCB PDF → JSON), [bagyo-api](https://github.com/edwardguevarra/bagyo-api) (cyclone REST API), and [ph-municipalities](https://github.com/ciatph/ph-municipalities) (municipality lists from PAGASA 10-day files). Scaffolded with the [CLI Printing Press](https://github.com/mvanhorn/cli-printing-press).
+
+## License
+
+Apache-2.0. See [LICENSE](LICENSE).

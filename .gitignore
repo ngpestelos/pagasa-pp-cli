@@ -1,0 +1,17 @@
+# Compiled binary (built via `go build` / goreleaser)
+/pagasa-pp-cli
+/pagasa-pp-mcp
+/dist/
+
+# Local SQLite mirror written at runtime
+*.db
+*.db-shm
+*.db-wal
+
+# Go build/test artifacts
+*.out
+*.test
+
+# Editor / OS noise
+.DS_Store
+*.swp

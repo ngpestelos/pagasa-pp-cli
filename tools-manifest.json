@@ -1,0 +1,45 @@
+{
+  "api_name": "pagasa",
+  "base_url": "https://www.pagasa.dost.gov.ph",
+  "description": "Every PAGASA public weather surface as one agent-native CLI — synopsis, city forecast, and live cyclone signals, with a local history no PAGASA page keeps.",
+  "mcp_ready": "full",
+  "http_transport": "browser-chrome-h2",
+  "auth": {
+    "type": "none"
+  },
+  "required_headers": [],
+  "tools": [
+    {
+      "name": "climate_list_10_day_climate_forecast",
+      "description": "Fetch structured links from /climate/climate-prediction/10-day-climate-forecast. Returns the html.",
+      "method": "GET",
+      "path": "/climate/climate-prediction/10-day-climate-forecast",
+      "no_auth": true,
+      "params": []
+    },
+    {
+      "name": "tropical-cyclone_list_severe_weather_bulletin",
+      "description": "Fetch structured links from /tropical-cyclone/severe-weather-bulletin. Returns the html.",
+      "method": "GET",
+      "path": "/tropical-cyclone/severe-weather-bulletin",
+      "no_auth": true,
+      "params": []
+    },
+    {
+      "name": "weather_list_weather",
+      "description": "Fetch structured links from /weather. Returns the html.",
+      "method": "GET",
+      "path": "/weather",
+      "no_auth": true,
+      "params": []
+    },
+    {
+      "name": "weather_list_weather_outlook_selected_philippine_cities",
+      "description": "Fetch structured links from /weather/weather-outlook-selected-philippine-cities. Returns the html.",
+      "method": "GET",
+      "path": "/weather/weather-outlook-selected-philippine-cities",
+      "no_auth": true,
+      "params": []
+    }
+  ]
+}

@@ -1,0 +1,51 @@
+version: 2
+project_name: pagasa-pp-cli
+changelog:
+  disable: true
+builds:
+  - id: pagasa-pp-cli
+    main: ./cmd/pagasa-pp-cli
+    binary: pagasa-pp-cli
+    env:
+      - CGO_ENABLED=0
+    ldflags:
+      - -s -w -X pagasa-pp-cli/internal/cli.version={{ .Version }}
+    targets:
+      - darwin_amd64
+      - darwin_arm64
+      - linux_amd64
+      - linux_arm64
+      - windows_amd64
+      - windows_arm64
+  - id: pagasa-pp-mcp
+    main: ./cmd/pagasa-pp-mcp
+    binary: pagasa-pp-mcp
+    env:
+      - CGO_ENABLED=0
+    ldflags:
+      - -s -w -X main.version={{ .Version }}
+    targets:
+      - darwin_amd64
+      - darwin_arm64
+      - linux_amd64
+      - linux_arm64
+      - windows_amd64
+      - windows_arm64
+archives:
+  - formats: [tar.gz]
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+checksum:
+  name_template: checksums.txt
+brews:
+  - name: pagasa-pp-cli
+    repository:
+      owner: ngpestelos
+      name: homebrew-tap
+    homepage: "https://github.com/ngpestelos/pagasa-pp-cli"
+    description: "Every PAGASA public weather surface as one agent-native CLI — synopsis, city forecast, and live cyclone signals, with a local history no PAGASA page keeps."
+    install: |
+      bin.install "pagasa-pp-cli"
+      bin.install "pagasa-pp-mcp"

@@ -1,0 +1,106 @@
+{
+  "dir": "\u003ccli-dir\u003e/pagasa-pp-cli",
+  "verdict": "WARN",
+  "path_check": {
+    "tested": 0,
+    "valid": 0,
+    "valid_pct": 0
+  },
+  "auth_check": {
+    "spec_scheme": "",
+    "generated_format": "",
+    "match": true,
+    "detail": "spec not provided; auth protocol check skipped"
+  },
+  "browser_session_check": {
+    "required": false,
+    "pass": true,
+    "detail": "spec not provided; browser-session auth check skipped"
+  },
+  "oauth_scope_coverage_check": {
+    "checked": 0,
+    "covered": 0,
+    "skipped": true,
+    "detail": "spec not provided; OAuth scope coverage check skipped"
+  },
+  "dead_flags": {
+    "total": 25,
+    "dead": 1,
+    "items": [
+      "maxAge"
+    ]
+  },
+  "dead_functions": {
+    "total": 71,
+    "dead": 1,
+    "items": [
+      "hasChangedLocalFlags"
+    ]
+  },
+  "pipeline_check": {
+    "sync_calls_domain": false,
+    "search_calls_domain": false,
+    "domain_tables": 4,
+    "sync_file_emitted": false,
+    "sync_resources_present": false,
+    "detail": "sync Upsert calls not found; search methods not found; 4 domain tables found"
+  },
+  "example_check": {
+    "tested": 10,
+    "with_examples": 10,
+    "valid_examples": 10,
+    "detail": "10/10 commands have examples"
+  },
+  "wiring_check": {
+    "command_tree": {
+      "defined": 55,
+      "registered": 55
+    },
+    "config_consistency": {
+      "consistent": true
+    },
+    "workflow_completeness": {
+      "skipped": true,
+      "total_steps": 0,
+      "mapped_steps": 0,
+      "detail": "no workflow_verify.yaml found"
+    }
+  },
+  "novel_features_check": {
+    "planned": 5,
+    "found": 5
+  },
+  "mcp_surface_parity": {
+    "state": "runtime_walking",
+    "pass": true,
+    "detail": "MCP surface mirrors the Cobra tree at runtime"
+  },
+  "reimplementation_check": {
+    "checked": 5,
+    "exempted_via_store": 3
+  },
+  "description_drift_check": {
+    "expected": "Every PAGASA public weather surface as one agent-native CLI — synopsis, city forecast, and live cyclone signals, with a local history no PAGASA page keeps."
+  },
+  "source_client_check": {
+    "checked": 8
+  },
+  "print_json_filtered_check": {
+    "checked": 36
+  },
+  "test_presence": {
+    "checked": 3
+  },
+  "naming_check": {
+    "checked": 36
+  },
+  "sync_param_drop_check": {
+    "checked": 0,
+    "skipped": true
+  },
+  "issues": [
+    "1 dead flags found",
+    "1 dead helper functions found",
+    "sync uses generic Upsert only"
+  ]
+}
