@@ -18,6 +18,12 @@ go install github.com/ngpestelos/pagasa-pp-cli/cmd/pagasa-pp-cli@latest
 
 The binary installs to `$(go env GOPATH)/bin` (usually `~/go/bin`); make sure that's on your `PATH`.
 
+Or use the one-shot installer (idempotent; retries the checksum-DB fetch; installs to `~/.local/bin`):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/ngpestelos/pagasa-pp-cli/main/scripts/install.sh | bash
+```
+
 An MCP server binary is also available for IDE/desktop agents:
 
 ```bash
