@@ -39,13 +39,3 @@ archives:
         formats: [zip]
 checksum:
   name_template: checksums.txt
-brews:
-  - name: pagasa-pp-cli
-    repository:
-      owner: ngpestelos
-      name: homebrew-tap
-    homepage: "https://github.com/ngpestelos/pagasa-pp-cli"
-    description: "Every PAGASA public weather surface as one agent-native CLI — synopsis, city forecast, and live cyclone signals, with a local history no PAGASA page keeps."
-    install: |
-      bin.install "pagasa-pp-cli"
-      bin.install "pagasa-pp-mcp"
