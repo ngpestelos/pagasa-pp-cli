@@ -11,20 +11,29 @@ import (
 )
 
 type stormView struct {
-	Active    bool     `json:"active"`
-	StormName string   `json:"storm_name,omitempty"`
-	StormKind string   `json:"storm_kind,omitempty"`
-	Synopsis  string   `json:"synopsis,omitempty"`
-	Bulletins []string `json:"bulletin_pdfs,omitempty"`
-	SignalMap string   `json:"signal_map,omitempty"`
-	Source    string   `json:"source"`
+	Active      bool                `json:"active"`
+	StormName   string              `json:"storm_name,omitempty"`
+	StormKind   string              `json:"storm_kind,omitempty"`
+	Synopsis    string              `json:"synopsis,omitempty"`
+	Bulletins   []string            `json:"bulletin_pdfs,omitempty"`
+	SignalMap   string              `json:"signal_map,omitempty"`
+	Location    string              `json:"location,omitempty"`
+	LatDeg      float64             `json:"lat_deg,omitempty"`
+	LonDeg      float64             `json:"lon_deg,omitempty"`
+	Movement    string              `json:"movement,omitempty"`
+	Strength    string              `json:"strength,omitempty"`
+	MaxWindKmh  int                 `json:"max_wind_kmh,omitempty"`
+	GustKmh     int                 `json:"gust_kmh,omitempty"`
+	Forecast    []pagasa.TrackPoint `json:"forecast,omitempty"`
+	WindSignals []pagasa.WindSignal `json:"wind_signals,omitempty"`
+	Source      string              `json:"source"`
 }
 
 func newStormCmd(flags *rootFlags) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:         "storm",
-		Short:       "Active tropical cyclone: synopsis, bulletin PDFs, and wind-signal map",
-		Long:        "Combine the PAGASA synopsis with the severe-weather-bulletin index so agents get the active cyclone name, downloadable bulletin PDFs, and the wind-signal map in one call. Reports active:false when no cyclone is being tracked.",
+		Short:       "Active tropical cyclone: position, intensity, movement, forecast, and wind signals",
+		Long:        "Combine the PAGASA synopsis with the severe-weather-bulletin index so agents get the active cyclone name, center coordinates, intensity, movement, forecast track, bulletin PDFs, and per-locality wind-signal breakdown in one call. Reports active:false when no cyclone is being tracked.",
 		Example:     "  pagasa-pp-cli storm --json",
 		Annotations: map[string]string{"mcp:read-only": "true"},
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -57,6 +66,17 @@ func newStormCmd(flags *rootFlags) *cobra.Command {
 			view.SignalMap = b.SignalMap
 			view.Active = view.StormName != "" || len(b.PDFs) > 0
 
+			detail := pagasa.ParseStormDetail(string(raw))
+			view.Location = detail.Location
+			view.LatDeg = detail.LatDeg
+			view.LonDeg = detail.LonDeg
+			view.Movement = detail.Movement
+			view.Strength = detail.Strength
+			view.MaxWindKmh = detail.MaxWindKmh
+			view.GustKmh = detail.GustKmh
+			view.Forecast = detail.Forecast
+			view.WindSignals = detail.WindSignals
+
 			if machineOut(cmd, flags) {
 				return printJSONFiltered(cmd.OutOrStdout(), view, flags)
 			}
@@ -67,11 +87,26 @@ func newStormCmd(flags *rootFlags) *cobra.Command {
 			if view.StormName != "" {
 				fmt.Fprintf(cmd.OutOrStdout(), "%s %q\n\n%s\n\n", view.StormKind, view.StormName, view.Synopsis)
 			}
+			if view.Location != "" {
+				fmt.Fprintf(cmd.OutOrStdout(), "  center:   %s\n", view.Location)
+			}
+			if view.Movement != "" {
+				fmt.Fprintf(cmd.OutOrStdout(), "  movement: %s\n", view.Movement)
+			}
+			if view.Strength != "" {
+				fmt.Fprintf(cmd.OutOrStdout(), "  strength: %s\n", view.Strength)
+			}
+			for _, t := range view.Forecast {
+				fmt.Fprintf(cmd.OutOrStdout(), "  forecast: %s - %s\n", t.ValidAt, t.Position)
+			}
 			for _, p := range view.Bulletins {
 				fmt.Fprintf(cmd.OutOrStdout(), "  bulletin: %s\n", p)
 			}
 			if view.SignalMap != "" {
 				fmt.Fprintf(cmd.OutOrStdout(), "  signals:  %s\n", view.SignalMap)
+			}
+			for _, ws := range view.WindSignals {
+				fmt.Fprintf(cmd.OutOrStdout(), "  signal %d: %s\n", ws.Signal, ws.AffectedAreas)
 			}
 			return nil
 		},

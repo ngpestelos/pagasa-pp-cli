@@ -39,7 +39,7 @@ pagasa-pp-cli now
 # 5-day forecast for one city (temp range + rain chance + condition)
 pagasa-pp-cli forecast --city "Metro Manila"
 
-# active cyclone: synopsis + downloadable bulletin PDFs + signal map
+# active cyclone: synopsis, center position, intensity, movement, forecast track, wind signals by locality
 pagasa-pp-cli storm --json
 
 # how far is the storm from a point? (Mandaluyong shown)
@@ -57,7 +57,7 @@ Add `--json` (or `--agent`) to any command for machine output; output is auto-JS
 |---------|--------------|
 | `now` | Current synopsis and active tropical cyclone (name, category, issuance time). |
 | `forecast --city <name>` | 5-day forecast for a selected city. `--list-cities` shows the 18 valid names; `--city` matches on a case-insensitive substring. |
-| `storm` | Active cyclone: synopsis + bulletin PDF links + wind-signal map. Reports `active:false` when none is tracked. |
+| `storm` | Active cyclone: synopsis, center position/coordinates, intensity, movement, forecast track, bulletin PDF links, and per-locality wind-signal breakdown. Reports `active:false` when none is tracked. |
 | `approach --location "lat,lon"` | Great-circle distance from a fixed point to the storm center parsed from the synopsis. |
 | `watch --area <name>` | Whether a wind signal is relevant to a locality, with an honest "clear" state when no cyclone is active. Per-area signal numbers live only in the bulletin PDF, so this links the official signal map rather than fabricating a level. |
 | `digest --city <name>` | Synopsis + a city's forecast + active-storm bulletins in one payload. Persists a local snapshot. |

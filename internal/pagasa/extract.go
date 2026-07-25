@@ -198,3 +198,143 @@ func ParseBulletin(html string) Bulletin {
 	}
 	return b
 }
+
+// --- Storm detail: center position, movement, strength, forecast track, wind signals ---
+
+var (
+	locationRe    = regexp.MustCompile(`(?is)panel-heading">Location of Eye/center</div>\s*<div class="panel-body">\s*<p>(.*?)</p>`)
+	movementRe    = regexp.MustCompile(`(?is)panel-heading">Movement</div>\s*<div class="panel-body">\s*<p>(.*?)</p>`)
+	strengthRe    = regexp.MustCompile(`(?is)panel-heading">Strength</div>\s*<div class="panel-body">\s*<p>(.*?)</p>`)
+	forecastPosRe = regexp.MustCompile(`(?is)panel-heading">Forecast Position</div>\s*<div class="panel-body">\s*<ul>(.*?)</ul>`)
+	forecastLiRe  = regexp.MustCompile(`(?is)<li>\s*(.*?)\s*</li>`)
+
+	movementDirSpeedRe = regexp.MustCompile(`(?i)Moving\s+([A-Za-z][A-Za-z\s-]*?)\s+at\s+([0-9.]+)\s*km/h`)
+	strengthWindsRe    = regexp.MustCompile(`(?is)Maximum sustained winds of\s*([0-9.]+)\s*km/h.*?gustiness of up to\s*([0-9.]+)\s*km/h`)
+
+	// The wind-signal table only appears between its own panel heading and the
+	// bulletin archive panel that always follows it; bounding the section this
+	// way avoids matching stray "signalnoN" text elsewhere on the page.
+	windSignalSectionRe = regexp.MustCompile(`(?is)panel-heading">Wind Signal.*?(panel-heading">Tropical Cyclone Bulletin Archive|\z)`)
+	windSignalNoneRe    = regexp.MustCompile(`(?i)No Tropical Cyclone Wind Signal`)
+	signalHeaderRe      = regexp.MustCompile(`(?is)class="signalno(\d+)"`)
+	affectedAreasCellRe = regexp.MustCompile(`(?is)<strong>Affected Areas</strong>\s*</td>\s*<td>\s*(.*?)\s*</td>`)
+	liCloseRe           = regexp.MustCompile(`(?is)</li>`)
+	strongCloseRe       = regexp.MustCompile(`(?is)</strong>`)
+	tagRe               = regexp.MustCompile(`<[^>]+>`)
+	repeatedSepRe       = regexp.MustCompile(`(?:;\s*){2,}`)
+	whitespaceRunRe     = regexp.MustCompile(`\s+`)
+)
+
+// TrackPoint is one forecast-position entry, e.g. valid_at "Jul 26, 2026
+// 08:00 AM", position "785 km West Northwest of Itbayat, Batanes ... ".
+type TrackPoint struct {
+	ValidAt  string `json:"valid_at"`
+	Position string `json:"position"`
+}
+
+// WindSignal is one active tropical cyclone wind signal number and the
+// localities it covers, flattened from the bulletin's nested region/locality
+// list into one descriptive string.
+type WindSignal struct {
+	Signal        int    `json:"signal"`
+	AffectedAreas string `json:"affected_areas"`
+}
+
+// StormDetail holds the storm center position, movement, strength, forecast
+// track, and per-locality wind-signal breakdown parsed from the
+// severe-weather-bulletin page. A field is left zero-valued when its panel
+// is not found on the page (bulletin layout drift, or a downgraded system
+// that no longer publishes that panel) rather than erroring the whole parse.
+type StormDetail struct {
+	Location     string       `json:"location,omitempty"`
+	LatDeg       float64      `json:"lat_deg,omitempty"`
+	LonDeg       float64      `json:"lon_deg,omitempty"`
+	Movement     string       `json:"movement,omitempty"`
+	MoveDir      string       `json:"move_direction,omitempty"`
+	MoveSpeedKmh int          `json:"move_speed_kmh,omitempty"`
+	Strength     string       `json:"strength,omitempty"`
+	MaxWindKmh   int          `json:"max_wind_kmh,omitempty"`
+	GustKmh      int          `json:"gust_kmh,omitempty"`
+	Forecast     []TrackPoint `json:"forecast,omitempty"`
+	WindSignals  []WindSignal `json:"wind_signals,omitempty"`
+}
+
+// ParseStormDetail extracts center position, movement, strength, forecast
+// track, and wind-signal-by-locality from the severe-weather-bulletin page
+// HTML.
+func ParseStormDetail(html string) StormDetail {
+	var d StormDetail
+
+	if m := locationRe.FindStringSubmatch(html); m != nil {
+		d.Location = cliutil.CleanText(m[1])
+		if lat, lon, ok := ParsePosition(d.Location); ok {
+			d.LatDeg, d.LonDeg = lat, lon
+		}
+	}
+	if m := movementRe.FindStringSubmatch(html); m != nil {
+		d.Movement = cliutil.CleanText(m[1])
+		if mm := movementDirSpeedRe.FindStringSubmatch(d.Movement); mm != nil {
+			d.MoveDir = strings.TrimSpace(mm[1])
+			d.MoveSpeedKmh = atoi(mm[2])
+		}
+	}
+	if m := strengthRe.FindStringSubmatch(html); m != nil {
+		d.Strength = cliutil.CleanText(m[1])
+		if mm := strengthWindsRe.FindStringSubmatch(d.Strength); mm != nil {
+			d.MaxWindKmh = atoi(mm[1])
+			d.GustKmh = atoi(mm[2])
+		}
+	}
+	if m := forecastPosRe.FindStringSubmatch(html); m != nil {
+		for _, li := range forecastLiRe.FindAllStringSubmatch(m[1], -1) {
+			text := cliutil.CleanText(li[1])
+			validAt, position, ok := strings.Cut(text, " - ")
+			if !ok {
+				continue
+			}
+			d.Forecast = append(d.Forecast, TrackPoint{
+				ValidAt:  strings.TrimSpace(validAt),
+				Position: strings.TrimSpace(position),
+			})
+		}
+	}
+	d.WindSignals = parseWindSignals(html)
+	return d
+}
+
+func parseWindSignals(html string) []WindSignal {
+	sec := windSignalSectionRe.FindString(html)
+	if sec == "" || windSignalNoneRe.MatchString(sec) {
+		return nil
+	}
+	headers := signalHeaderRe.FindAllStringSubmatchIndex(sec, -1)
+	var out []WindSignal
+	for i, h := range headers {
+		start := h[1]
+		end := len(sec)
+		if i+1 < len(headers) {
+			end = headers[i+1][0]
+		}
+		chunk := sec[start:end]
+		ws := WindSignal{Signal: atoi(sec[h[2]:h[3]])}
+		if am := affectedAreasCellRe.FindStringSubmatch(chunk); am != nil {
+			ws.AffectedAreas = flattenAreasCell(am[1])
+		}
+		out = append(out, ws)
+	}
+	return out
+}
+
+// flattenAreasCell turns the affected-areas cell's nested region/locality
+// <ul><li><strong>Region</strong><ul><li>localities</li></ul></li></ul>
+// markup into a single "Region: localities; Region: localities" description.
+func flattenAreasCell(raw string) string {
+	s := strongCloseRe.ReplaceAllString(raw, ": ")
+	s = liCloseRe.ReplaceAllString(s, "; ")
+	s = tagRe.ReplaceAllString(s, " ")
+	s = cliutil.CleanText(s)
+	s = whitespaceRunRe.ReplaceAllString(s, " ")
+	s = repeatedSepRe.ReplaceAllString(s, "; ")
+	s = strings.Trim(strings.TrimSpace(s), "; ")
+	return s
+}

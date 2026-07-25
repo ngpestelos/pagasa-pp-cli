@@ -106,3 +106,124 @@ func TestParseBulletin(t *testing.T) {
 		t.Error("expected signal map link")
 	}
 }
+
+const stormDetailHTMLNoSignal = `
+<div class=" panel">
+    <div class="panel-heading">Location of Eye/center</div>
+    <div class="panel-body">
+        <p>The center of Typhoon KIYAPO was estimated based on all available data at  465 km West of Basco, Batanes (21.1 &deg;N, 117.4 &deg;E )</p>
+    </div>
+</div>
+<div class="panel">
+    <div class="panel-heading">Movement</div>
+    <div class="panel-body">
+        <p>Moving Northwestward at 25 km/h</p>
+    </div>
+</div>
+<div class=" panel">
+    <div class="panel-heading">Strength</div>
+    <div class="panel-body">
+        <p>Maximum sustained winds of 120 km/h near the center and gustiness of up to 150 km/h</p>
+    </div>
+</div>
+<div class="panel">
+    <div class="panel-heading">Forecast Position</div>
+    <div class="panel-body">
+        <ul>
+            <li>Jul 25, 2026 08:00 PM - 610 km West Northwest of Itbayat, Batanes  (OUTSIDE PAR)</li>
+            <li>Jul 26, 2026 08:00 AM - 785 km West Northwest of Itbayat, Batanes (OUTSIDE PAR)</li>
+        </ul>
+    </div>
+</div>
+<div class="panel">
+    <div class="panel-heading">Wind Signal</div>
+    <div class="panel-body">
+        <span>No Tropical Cyclone Wind Signal</span>
+    </div>
+</div>
+<div class="panel-heading">Tropical Cyclone Bulletin Archive</div>
+`
+
+func TestParseStormDetail(t *testing.T) {
+	d := ParseStormDetail(stormDetailHTMLNoSignal)
+	if d.LatDeg != 21.1 || d.LonDeg != 117.4 {
+		t.Errorf("got (%v,%v), want (21.1,117.4)", d.LatDeg, d.LonDeg)
+	}
+	if d.MoveDir != "Northwestward" || d.MoveSpeedKmh != 25 {
+		t.Errorf("got dir=%q speed=%d, want Northwestward/25", d.MoveDir, d.MoveSpeedKmh)
+	}
+	if d.MaxWindKmh != 120 || d.GustKmh != 150 {
+		t.Errorf("got wind=%d gust=%d, want 120/150", d.MaxWindKmh, d.GustKmh)
+	}
+	if len(d.Forecast) != 2 {
+		t.Fatalf("expected 2 forecast points, got %d", len(d.Forecast))
+	}
+	if d.Forecast[0].ValidAt != "Jul 25, 2026 08:00 PM" {
+		t.Errorf("got valid_at %q", d.Forecast[0].ValidAt)
+	}
+	if d.WindSignals != nil {
+		t.Errorf("expected no wind signals, got %+v", d.WindSignals)
+	}
+}
+
+const windSignalActiveHTML = `
+<div class="panel-heading">Wind Signal
+    <a href="https://pubfiles.pagasa.dost.gov.ph/tamss/weather/signals_kristine.png">(Areas with TCWS)</a>
+</div>
+<table class="table text-center table-header">
+    <thead>
+        <tr><th colspan="2" class="signalno3">Tropical Cyclone Wind Signal no.  <img src="tcws3.png"></th></tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td class="text-nowrap text-middle bg-danger"><strong>Affected Areas</strong></td>
+            <td>
+                <ul style="text-align: left;">
+                    <li><strong>Luzon</strong>
+                        <ul><li>Cagayan, Isabela, and Batanes</li></ul>
+                    </li>
+                </ul>
+            </td>
+        </tr>
+        <tr>
+            <td class="text-nowrap text-middle bg-info"><strong>Meteorological Condition</strong></td>
+            <td><ul style="text-align: left"><li>A tropical cyclone will affect the locality.</li></ul></td>
+        </tr>
+    </tbody>
+    <thead>
+        <tr><th colspan="2" class="signalno1">Tropical Cyclone Wind Signal no. <img src="tcws1.png"></th></tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td class="text-nowrap text-middle bg-danger"><strong>Affected Areas</strong></td>
+            <td>
+                <ul style="text-align: left;">
+                    <li><strong>Visayas</strong>
+                        <ul><li>Eastern Samar and Northern Samar</li></ul>
+                    </li>
+                </ul>
+            </td>
+        </tr>
+    </tbody>
+</table>
+<div class="panel-heading">Tropical Cyclone Bulletin Archive</div>
+`
+
+func TestParseStormDetailWindSignalsActive(t *testing.T) {
+	d := ParseStormDetail(windSignalActiveHTML)
+	if len(d.WindSignals) != 2 {
+		t.Fatalf("expected 2 wind signals, got %d: %+v", len(d.WindSignals), d.WindSignals)
+	}
+	if d.WindSignals[0].Signal != 3 {
+		t.Errorf("got signal %d, want 3", d.WindSignals[0].Signal)
+	}
+	if want := "Luzon: Cagayan, Isabela, and Batanes"; d.WindSignals[0].AffectedAreas != want {
+		t.Errorf("got areas %q, want %q", d.WindSignals[0].AffectedAreas, want)
+	}
+	if d.WindSignals[1].Signal != 1 {
+		t.Errorf("got signal %d, want 1", d.WindSignals[1].Signal)
+	}
+	if want := "Visayas: Eastern Samar and Northern Samar"; d.WindSignals[1].AffectedAreas != want {
+		t.Errorf("got areas %q, want %q", d.WindSignals[1].AffectedAreas, want)
+	}
+}
