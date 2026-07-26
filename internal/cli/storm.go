@@ -33,7 +33,7 @@ func newStormCmd(flags *rootFlags) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:         "storm",
 		Short:       "Active tropical cyclone: position, intensity, movement, forecast, and wind signals",
-		Long:        "Combine the PAGASA synopsis with the severe-weather-bulletin index so agents get the active cyclone name, center coordinates, intensity, movement, forecast track, bulletin PDFs, and per-locality wind-signal breakdown in one call. Reports active:false when no cyclone is being tracked.",
+		Long:        "Combine the PAGASA synopsis with the severe-weather-bulletin index so agents get the active cyclone name, center coordinates, intensity, movement, forecast track, bulletin PDFs, and per-locality wind-signal breakdown in one call. Independent pages are fetched in parallel. Reports active:false when no cyclone is being tracked.",
 		Example:     "  pagasa-pp-cli storm --json",
 		Annotations: map[string]string{"mcp:read-only": "true"},
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -49,18 +49,24 @@ func newStormCmd(flags *rootFlags) *cobra.Command {
 			}
 			view := stormView{Source: "live"}
 
-			if raw, err := c.Get(ctx, "/weather", nil); err == nil {
-				if syn, ok := pagasa.ParseSynopsis(string(raw)); ok {
+			paths := []pageFetch{
+				{Path: "/weather", Required: false},
+				{Path: "/tropical-cyclone/severe-weather-bulletin", Required: true},
+			}
+			bodies := fetchPages(ctx, c, paths)
+			if err := firstRequiredError(paths, bodies); err != nil {
+				return classifyAPIError(err, flags)
+			}
+
+			if bodies[0].Err == nil {
+				if syn, ok := pagasa.ParseSynopsis(string(bodies[0].Body)); ok {
 					view.Synopsis = syn.Text
 					view.StormName = syn.StormName
 					view.StormKind = syn.StormKind
 				}
 			}
 
-			raw, err := c.Get(ctx, "/tropical-cyclone/severe-weather-bulletin", nil)
-			if err != nil {
-				return classifyAPIError(err, flags)
-			}
+			raw := bodies[1].Body
 			b := pagasa.ParseBulletin(string(raw))
 			view.Bulletins = b.PDFs
 			view.SignalMap = b.SignalMap

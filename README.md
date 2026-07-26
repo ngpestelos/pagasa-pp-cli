@@ -59,8 +59,8 @@ Add `--json` (or `--agent`) to any command for machine output; output is auto-JS
 | `forecast --city <name>` | 5-day forecast for a selected city. `--list-cities` shows the 18 valid names; `--city` matches on a case-insensitive substring. |
 | `storm` | Active cyclone: synopsis, center position/coordinates, intensity, movement, forecast track, bulletin PDF links, and per-locality wind-signal breakdown. Reports `active:false` when none is tracked. |
 | `approach --location "lat,lon"` | Great-circle distance from a fixed point to the storm center parsed from the synopsis. |
-| `watch --area <name>` | Whether a wind signal is relevant to a locality, with an honest "clear" state when no cyclone is active. Per-area signal numbers live only in the bulletin PDF, so this links the official signal map rather than fabricating a level. |
-| `digest --city <name>` | Synopsis + a city's forecast + active-storm bulletins in one payload. Persists a local snapshot. |
+| `watch --area <name>` | Wind-signal relevance for a locality: matches the bulletin HTML `wind_signals` table when possible (`signal` + `signal_matched`), otherwise honest "not confirmed" plus signal map / PDF links. Empty match ≠ confirmed clear. |
+| `digest --city <name>` | Synopsis + a city's forecast + active-storm bulletins in one payload (pages fetched in parallel). Persists a local snapshot. |
 | `history` | Past synopsis/cyclone snapshots recorded locally (PAGASA serves only the latest). Empty until you've run `digest`/`now`/`storm` over time. |
 | `drift --city <name>` | How a city's forecast changed across recorded snapshots. Needs at least two snapshots for the city. |
 
