@@ -28,7 +28,7 @@ func newNovelDigestCmd(flags *rootFlags) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:         "digest",
 		Short:       "One payload: synopsis + a city's forecast + active-storm bulletins",
-		Long:        "Compose the PAGASA synopsis, one city's multi-day forecast, and the active tropical-cyclone bulletins into a single agent-native payload — replacing three separate page scrapes. Persists a local snapshot for history and drift.",
+		Long:        "Compose the PAGASA synopsis, one city's multi-day forecast, and the active tropical-cyclone bulletins into a single agent-native payload — replacing three separate page scrapes. Fetches independent pages in parallel. Persists a local snapshot for history and drift.",
 		Example:     "  pagasa-pp-cli digest --city \"Metro Manila\" --json",
 		Annotations: map[string]string{"mcp:read-only": "true"},
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -44,26 +44,32 @@ func newNovelDigestCmd(flags *rootFlags) *cobra.Command {
 			}
 			view := digestView{CapturedAt: time.Now().UTC().Format(time.RFC3339), Source: "live"}
 
-			raw, err := c.Get(ctx, "/weather", nil)
-			if err != nil {
+			paths := []pageFetch{
+				{Path: "/weather", Required: true},
+				{Path: "/tropical-cyclone/severe-weather-bulletin", Required: false},
+			}
+			if flagCity != "" {
+				paths = append(paths, pageFetch{
+					Path: "/weather/weather-outlook-selected-philippine-cities", Required: false,
+				})
+			}
+			bodies := fetchPages(ctx, c, paths)
+			if err := firstRequiredError(paths, bodies); err != nil {
 				return classifyAPIError(err, flags)
 			}
-			if syn, ok := pagasa.ParseSynopsis(string(raw)); ok {
+
+			if syn, ok := pagasa.ParseSynopsis(string(bodies[0].Body)); ok {
 				view.Synopsis = syn.Text
 				view.StormName = syn.StormName
 				view.StormKind = syn.StormKind
 			}
-
-			if flagCity != "" {
-				if craw, err := c.Get(ctx, "/weather/weather-outlook-selected-philippine-cities", nil); err == nil {
-					if match := pickCity(pagasa.ParseCityForecasts(string(craw)), flagCity); match != nil {
-						view.City = match
-					}
-				}
+			if bodies[1].Err == nil {
+				view.Bulletins = pagasa.ParseBulletin(string(bodies[1].Body)).PDFs
 			}
-
-			if braw, err := c.Get(ctx, "/tropical-cyclone/severe-weather-bulletin", nil); err == nil {
-				view.Bulletins = pagasa.ParseBulletin(string(braw)).PDFs
+			if flagCity != "" && len(bodies) > 2 && bodies[2].Err == nil {
+				if match := pickCity(pagasa.ParseCityForecasts(string(bodies[2].Body)), flagCity); match != nil {
+					view.City = match
+				}
 			}
 
 			// Best-effort snapshot for history/drift. A cache-write failure must

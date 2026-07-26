@@ -31,7 +31,7 @@ func newNovelApproachCmd(flags *rootFlags) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:         "approach",
 		Short:       "Distance from a fixed location to the active storm's center",
-		Long:        "Parse the active tropical cyclone's center coordinates from the PAGASA synopsis and report the great-circle distance to a fixed --location \"lat,lon\". Reports active:false when no cyclone is being tracked.",
+		Long:        "Parse the active tropical cyclone's center coordinates from the PAGASA synopsis (bulletin location panel as fallback) and report the great-circle distance to a fixed --location \"lat,lon\". Independent pages are fetched in parallel. Reports active:false when no cyclone is being tracked.",
 		Example:     "  pagasa-pp-cli approach --location 14.58,121.03 --json",
 		Annotations: map[string]string{"mcp:read-only": "true"},
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -53,36 +53,77 @@ func newNovelApproachCmd(flags *rootFlags) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			raw, err := c.Get(ctx, "/weather", nil)
-			if err != nil {
+			view := approachView{FromLat: lat, FromLon: lon, Source: "live"}
+
+			paths := []pageFetch{
+				{Path: "/weather", Required: true},
+				{Path: "/tropical-cyclone/severe-weather-bulletin", Required: false},
+			}
+			bodies := fetchPages(ctx, c, paths)
+			if err := firstRequiredError(paths, bodies); err != nil {
 				return classifyAPIError(err, flags)
 			}
-			view := approachView{FromLat: lat, FromLon: lon, Source: "live"}
-			syn, ok := pagasa.ParseSynopsis(string(raw))
-			if !ok || syn.StormName == "" {
-				view.Note = "no tropical cyclone is currently being tracked"
-				if machineOut(cmd, flags) {
-					return printJSONFiltered(cmd.OutOrStdout(), view, flags)
+
+			syn, synOK := pagasa.ParseSynopsis(string(bodies[0].Body))
+			if !synOK || syn.StormName == "" {
+				// Bulletin PDFs alone can indicate an active system with a weak synopsis.
+				if bodies[1].Err == nil {
+					b := pagasa.ParseBulletin(string(bodies[1].Body))
+					if len(b.PDFs) == 0 {
+						view.Note = "no tropical cyclone is currently being tracked"
+						if machineOut(cmd, flags) {
+							return printJSONFiltered(cmd.OutOrStdout(), view, flags)
+						}
+						fmt.Fprintln(cmd.OutOrStdout(), view.Note)
+						return nil
+					}
+					view.Active = true
+					view.Note = "storm bulletin active but name not found in synopsis"
+				} else {
+					view.Note = "no tropical cyclone is currently being tracked"
+					if machineOut(cmd, flags) {
+						return printJSONFiltered(cmd.OutOrStdout(), view, flags)
+					}
+					fmt.Fprintln(cmd.OutOrStdout(), view.Note)
+					return nil
 				}
-				fmt.Fprintln(cmd.OutOrStdout(), view.Note)
-				return nil
+			} else {
+				view.Active = true
+				view.StormName = syn.StormName
+				view.StormKind = syn.StormKind
 			}
-			view.Active = true
-			view.StormName = syn.StormName
-			view.StormKind = syn.StormKind
-			if slat, slon, ok := pagasa.ParsePosition(syn.Text); ok {
+
+			// Prefer synopsis coords; fall back to bulletin "Location of Eye/center".
+			var slat, slon float64
+			var posOK bool
+			if synOK {
+				slat, slon, posOK = pagasa.ParsePosition(syn.Text)
+			}
+			if !posOK && bodies[1].Err == nil {
+				detail := pagasa.ParseStormDetail(string(bodies[1].Body))
+				if detail.LatDeg != 0 || detail.LonDeg != 0 {
+					slat, slon, posOK = detail.LatDeg, detail.LonDeg, true
+				}
+			}
+			if posOK {
 				view.StormLat, view.StormLon = slat, slon
 				d := pagasa.HaversineKm(lat, lon, slat, slon)
 				view.DistanceKm = &d
-			} else {
-				view.Note = "storm active but center coordinates not found in synopsis"
+				view.Note = ""
+			} else if view.Note == "" {
+				view.Note = "storm active but center coordinates not found in synopsis or bulletin"
 			}
+
 			if machineOut(cmd, flags) {
 				return printJSONFiltered(cmd.OutOrStdout(), view, flags)
 			}
 			if view.DistanceKm != nil {
-				fmt.Fprintf(cmd.OutOrStdout(), "%s %q is %.0f km from your location.\n",
-					view.StormKind, view.StormName, *view.DistanceKm)
+				label := view.StormKind + " " + strconv.Quote(view.StormName)
+				if view.StormName == "" {
+					label = "Active cyclone"
+				}
+				fmt.Fprintf(cmd.OutOrStdout(), "%s is %.0f km from your location.\n",
+					label, *view.DistanceKm)
 			} else {
 				fmt.Fprintln(cmd.OutOrStdout(), view.Note)
 			}
