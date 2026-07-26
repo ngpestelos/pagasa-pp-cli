@@ -24,9 +24,6 @@ const (
 	defaultHTTPAddr = ":7777"
 )
 
-// version is the printed MCP server's version, overridable at build time via ldflags.
-var version = "0.0.0-dev"
-
 func main() {
 	// Pin the learn-event surface for this process and every walker
 	// shell-out child, so usage events record surface=mcp.
@@ -35,9 +32,10 @@ func main() {
 		fmt.Fprintf(os.Stderr, "MCP client-profile bind failed: %v\n", err)
 		os.Exit(1)
 	}
+	// Version shares internal/cli resolution (ldflags → module → VCS → 0.0.0-dev).
 	s := server.NewMCPServer(
 		"Pagasa",
-		version,
+		cli.Version(),
 		server.WithToolCapabilities(false),
 	)
 
