@@ -4,23 +4,38 @@
 #
 #   curl -fsSL https://raw.githubusercontent.com/ngpestelos/pagasa-pp-cli/main/scripts/install.sh | bash
 #
-# Installs the pagasa-pp-cli binary via `go install`. If this machine has the
-# ngpestelos fleet layout (~/src/hermes-config, ~/.claude/skills), it also
-# wires the pp-pagasa skill; those steps are skipped cleanly elsewhere.
+# Prefers the GitHub release prebuilt tarball (checksum-verified). Falls back
+# to `go install` only when prebuilt cannot be resolved (no release asset,
+# network/API failure, unsupported arch) — never after a checksum mismatch.
+# If this machine has the ngpestelos fleet layout (~/src/hermes-config,
+# ~/.claude/skills), it also wires the pp-pagasa skill; those steps are
+# skipped cleanly elsewhere.
 #
-# Requires: git, and Go 1.21+ (GOTOOLCHAIN=auto fetches the 1.26.5 the module
-# needs). On the fleet, `rebuild` provides Go; otherwise install from
-# https://go.dev/dl/.
+# Requires: curl (prebuilt path), and for source fallback Go 1.21+
+# (GOTOOLCHAIN=auto fetches the toolchain the module needs). Checksum
+# verify needs sha256sum (Linux) or shasum (macOS).
 
 set -euo pipefail
 
 MODULE="github.com/ngpestelos/pagasa-pp-cli"
 BIN="pagasa-pp-cli"
+MCP="pagasa-pp-mcp"
 GOBIN_DIR="${GOBIN:-$HOME/.local/bin}"
 
 log() { printf '\033[1;34m==>\033[0m %s\n' "$*"; }
 warn() { printf '\033[1;33mwarn:\033[0m %s\n' "$*" >&2; }
 die() { printf '\033[1;31merror:\033[0m %s\n' "$*" >&2; exit 1; }
+
+# SHA256 of a file (portable: GNU coreutils or macOS shasum).
+file_sha256() {
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$1" | awk '{print $1}'
+  elif command -v shasum >/dev/null 2>&1; then
+    shasum -a 256 "$1" | awk '{print $1}'
+  else
+    die "need sha256sum or shasum to verify release checksums"
+  fi
+}
 
 OWNER_REPO="ngpestelos/pagasa-pp-cli"
 mkdir -p "$GOBIN_DIR"
@@ -28,7 +43,7 @@ mkdir -p "$GOBIN_DIR"
 # --- 1. Prefer the prebuilt release binary (no local compile) ----------------
 # Compiling modernc.org/sqlite is CPU-heavy — never do it on a small VPS that's
 # also running services. Download the CI-built binary instead; fall back to
-# `go install` only if the download can't be resolved.
+# `go install` only if the download can't be resolved (not on hash mismatch).
 os="$(uname -s | tr '[:upper:]' '[:lower:]')"
 case "$(uname -m)" in
   x86_64|amd64) arch=amd64 ;;
@@ -44,15 +59,40 @@ if [ -n "$arch" ] && command -v curl >/dev/null 2>&1; then
   if [ -n "$ver" ]; then
     tarball="pagasa-pp-cli_${ver}_${os}_${arch}.tar.gz"
     url="https://github.com/${OWNER_REPO}/releases/download/v${ver}/${tarball}"
+    csum_url="https://github.com/${OWNER_REPO}/releases/download/v${ver}/checksums.txt"
     log "Downloading prebuilt $BIN v$ver ($os/$arch)"
     tmp="$(mktemp -d)"
-    if curl -fsSL "$url" -o "$tmp/$tarball" 2>/dev/null && tar -xzf "$tmp/$tarball" -C "$GOBIN_DIR" 2>/dev/null; then
-      chmod +x "$GOBIN_DIR/pagasa-pp-cli" "$GOBIN_DIR/pagasa-pp-mcp" 2>/dev/null || true
-      install_ok=true
-    else
+    # shellcheck disable=SC2064
+    trap 'rm -rf "$tmp"' EXIT
+
+    if ! curl -fsSL "$csum_url" -o "$tmp/checksums.txt" 2>/dev/null; then
+      warn "could not fetch checksums.txt for v$ver; will try building from source."
+    elif ! curl -fsSL "$url" -o "$tmp/$tarball" 2>/dev/null; then
       warn "prebuilt download failed ($url); will try building from source."
+    else
+      expected="$(grep -E "[[:space:]]${tarball}\$" "$tmp/checksums.txt" | awk '{print $1}' | head -1)"
+      if [ -z "$expected" ]; then
+        # Missing entry is an integrity gap — fail closed (do not extract).
+        die "no checksum entry for ${tarball} in release checksums.txt"
+      fi
+      actual="$(file_sha256 "$tmp/$tarball")"
+      if [ "$actual" != "$expected" ]; then
+        die "checksum mismatch for ${tarball} (expected ${expected} got ${actual})"
+      fi
+      log "Checksum OK (${actual:0:12}…)"
+      # Extract only expected members — refuse unexpected tar paths.
+      if ! tar -xzf "$tmp/$tarball" -C "$GOBIN_DIR" "$BIN" "$MCP" 2>/dev/null; then
+        die "tar extract failed for ${tarball} (expected members: $BIN $MCP)"
+      fi
+      if [ ! -f "$GOBIN_DIR/$BIN" ] || [ ! -f "$GOBIN_DIR/$MCP" ]; then
+        die "extract missing members under $GOBIN_DIR (need $BIN + $MCP)"
+      fi
+      chmod +x "$GOBIN_DIR/$BIN" "$GOBIN_DIR/$MCP" 2>/dev/null || true
+      install_ok=true
     fi
+
     rm -rf "$tmp"
+    trap - EXIT
   fi
 fi
 
