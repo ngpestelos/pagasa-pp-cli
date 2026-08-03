@@ -195,9 +195,9 @@ var reservedStructuredArgs = map[string]bool{
 // per-client filesystem, relocate the config/data/state/cache roots, load a
 // malicious config file, change the delivery target, or disable polite HTTP
 // pacing with --rate-limit 0, all of which sit outside the per-command surface
-// the agent is supposed to be calling. Typed MCP tools hardcode
-// defaultMCPRateLimit (2); shell-out mirrors keep the CLI default (also 2) by
-// refusing agent overrides of rate-limit (issue #25).
+// the agent is supposed to be calling. Typed MCP tools hardcode polite rate 2;
+// shell-out mirrors keep the CLI default (also 2) by refusing agent overrides
+// of rate-limit (issue #25).
 var blockedRootFlags = map[string]bool{
 	"base-url":   true,
 	"client":     true,
