@@ -63,9 +63,9 @@ Add `--json` (or `--agent`) to any command for machine output; output is auto-JS
 | `digest --city <name>` | Synopsis + a city's forecast + active-storm bulletins in one payload (pages fetched in parallel). Persists a local snapshot. |
 | `history` | Past synopsis/cyclone snapshots recorded locally (PAGASA serves only the latest). Empty until you've run `digest`/`now`/`storm` over time. |
 | `drift --city <name>` | How a city's forecast changed across recorded snapshots. Needs at least two snapshots for the city. |
-| `obs` | Latest **Automated Weather Stations** table (temp, humidity, wind, precip, pressure, solar). Live read; optional `--station` filter. Host: `bagong.pagasa.dost.gov.ph`. |
-| `obs --capture` | Same scrape **plus** write to local `aws_obs` and prune rows older than 14 days. Use from cron for a local series. |
-| `obs history` | Local AWS series (empty until captures exist). Distinct from synopsis `history`. |
+| `obs` | Latest **Automated Weather Stations** table (temp, humidity, wind, precip, pressure, solar). Live read; optional `--station` filter; optional `--limit` for display count only. Host: `bagong.pagasa.dost.gov.ph`. |
+| `obs --capture` | Same scrape **plus** write to local `aws_obs` and prune rows older than 14 days. Use from cron for a local series. `--station` still filters; **do not pass `--limit`** (rejected — capture stores the full matched set). |
+| `obs history` | Local AWS series (empty until captures exist). Distinct from synopsis `history`. `--limit` / `--station` apply here for query. |
 
 Run `pagasa-pp-cli --help` for the full command tree, including the raw page-extraction commands (`weather`, `climate`, `tropical-cyclone`) and the local-store utilities.
 
@@ -76,8 +76,12 @@ PAGASA's AWS page publishes **only the latest snapshot** per station (typically 
 ```bash
 # every 10–15 minutes (launchd/systemd/cron — not installed by install.sh)
 pagasa-pp-cli obs --capture --agent
+# optional: restrict which stations are scraped/stored
+# pagasa-pp-cli obs --capture --station 98 --agent
 pagasa-pp-cli obs history --station 98 --limit 48 --json
 ```
+
+**`--limit` vs `--capture`:** `--limit` is for **live** `obs` display and for **`obs history`** queries only. Combining `obs --capture --limit N` is a hard error — capture must persist the full matched station set (prune remains table-wide). Put row caps on `obs history --limit`, not on capture.
 
 Empty `obs history` after upgrade is expected until the first capture. Prune is irreversible (14-day default, capture path only). Global/non-PAGASA weather remains out of scope — use open-meteo.
 
