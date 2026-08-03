@@ -40,7 +40,7 @@ clear" — area names may differ from the bulletin's province/locality list.
 Falls back to signal-map URL + bulletin PDFs when HTML has no row for the area.
 Independent pages are fetched in parallel.`, "\n"),
 		Example:     "  pagasa-pp-cli watch --area Mandaluyong --json",
-		Annotations: map[string]string{"mcp:read-only": "true"},
+		Annotations: map[string]string{"mcp:read-only": "true", "mcp:open-world": "true"},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) == 0 && cmd.Flags().NFlag() == 0 {
 				return cmd.Help()

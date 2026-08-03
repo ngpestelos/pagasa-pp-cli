@@ -471,6 +471,66 @@ func TestPositionalVariadicNestedAngleBracketsSanitizesKey(t *testing.T) {
 	}
 }
 
+// TestRegisterAll_OpenWorldHints pins issue #24: novel scrapers advertise
+// openWorldHint=true; local read-only tools advertise openWorldHint=false.
+func TestRegisterAll_OpenWorldHints(t *testing.T) {
+	root := &cobra.Command{Use: "root"}
+	root.AddCommand(
+		&cobra.Command{
+			Use:         "storm",
+			Annotations: map[string]string{"mcp:read-only": "true", "mcp:open-world": "true"},
+			RunE:        func(cmd *cobra.Command, args []string) error { return nil },
+		},
+		&cobra.Command{
+			Use:         "history",
+			Annotations: map[string]string{"mcp:read-only": "true"},
+			RunE:        func(cmd *cobra.Command, args []string) error { return nil },
+		},
+		&cobra.Command{
+			Use:         "obs",
+			Annotations: map[string]string{"mcp:open-world": "true"},
+			RunE:        func(cmd *cobra.Command, args []string) error { return nil },
+		},
+		&cobra.Command{
+			Use:         "teach",
+			Annotations: map[string]string{"mcp:local-write": "true"},
+			RunE:        func(cmd *cobra.Command, args []string) error { return nil },
+		},
+	)
+	s := server.NewMCPServer("test", "0.0.0")
+	RegisterAll(s, root, func() (string, error) { return "missing-binary", nil })
+	tools := s.ListTools()
+
+	storm := tools["storm"].Tool
+	if storm.Annotations.ReadOnlyHint == nil || !*storm.Annotations.ReadOnlyHint {
+		t.Fatalf("storm: want readOnlyHint=true, got %#v", storm.Annotations.ReadOnlyHint)
+	}
+	if storm.Annotations.OpenWorldHint == nil || !*storm.Annotations.OpenWorldHint {
+		t.Fatalf("storm: want openWorldHint=true, got %#v", storm.Annotations.OpenWorldHint)
+	}
+
+	hist := tools["history"].Tool
+	if hist.Annotations.ReadOnlyHint == nil || !*hist.Annotations.ReadOnlyHint {
+		t.Fatalf("history: want readOnlyHint=true")
+	}
+	if hist.Annotations.OpenWorldHint == nil || *hist.Annotations.OpenWorldHint {
+		t.Fatalf("history: want openWorldHint=false (local store), got %#v", hist.Annotations.OpenWorldHint)
+	}
+
+	obs := tools["obs"].Tool
+	if obs.Annotations.ReadOnlyHint != nil && *obs.Annotations.ReadOnlyHint {
+		t.Fatalf("obs: must not be read-only")
+	}
+	if obs.Annotations.OpenWorldHint == nil || !*obs.Annotations.OpenWorldHint {
+		t.Fatalf("obs: want openWorldHint=true, got %#v", obs.Annotations.OpenWorldHint)
+	}
+
+	teach := tools["teach"].Tool
+	if teach.Annotations.OpenWorldHint == nil || *teach.Annotations.OpenWorldHint {
+		t.Fatalf("teach local-write: want openWorldHint=false, got %#v", teach.Annotations.OpenWorldHint)
+	}
+}
+
 func TestRegisterAllPreservesTypedToolsAndExposesHandBuiltSearchWithoutTypedEquivalent(t *testing.T) {
 	root := &cobra.Command{Use: "root"}
 	root.AddCommand(

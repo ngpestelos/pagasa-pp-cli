@@ -62,7 +62,8 @@ Not a 60-minute METAR product; station Last Updated stamps are typically ~5–10
   pagasa-pp-cli obs --capture --agent
   pagasa-pp-cli obs history --station 98 --limit 24 --json`,
 		// No mcp:read-only: --capture writes/prunes local store and hits open-world HTTP.
-		// obs history remains read-only (see subcommand annotations).
+		// obs history remains read-only (see subcommand annotations). mcp:open-world: #24.
+		Annotations: map[string]string{"mcp:open-world": "true"},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if err := validateDataSourceStrategy(flags, "live"); err != nil {
 				return err

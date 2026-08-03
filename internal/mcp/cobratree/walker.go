@@ -43,14 +43,30 @@ func RegisterAll(s *server.MCPServer, root *cobra.Command, cliPath func() (strin
 			options = append(options, mcplib.WithString("args", mcplib.Description("Additional positional arguments to append to the command. Raw flags are rejected; use structured flag parameters instead.")))
 		}
 		readOnly := isMCPReadOnly(cmd)
+		openWorld := isMCPOpenWorld(cmd)
+		localWrite := isMCPLocalWrite(cmd)
 		if readOnly {
+			// Pure scrapes: read-only + open-world. Local store readers:
+			// read-only + open-world=false so hosts do not treat them as
+			// network tools (and network tools are not mistaken for local).
 			options = append(options, mcplib.WithReadOnlyHintAnnotation(true), mcplib.WithDestructiveHintAnnotation(false))
+			if openWorld {
+				options = append(options, mcplib.WithOpenWorldHintAnnotation(true))
+			} else {
+				options = append(options, mcplib.WithOpenWorldHintAnnotation(false))
+			}
 		}
-		if !readOnly && isMCPLocalWrite(cmd) {
+		if !readOnly && localWrite {
 			// Local-write tier: the command's only writes land in the CLI's
 			// own local store, so the tool is neither destructive nor
 			// open-world; readOnlyHint stays unset because it does write.
+			// open-world annotation is ignored here — local-write wins.
 			options = append(options, mcplib.WithDestructiveHintAnnotation(false), mcplib.WithOpenWorldHintAnnotation(false))
+		}
+		if !readOnly && !localWrite && openWorld {
+			// Network tools that also mutate local state (obs --capture,
+			// now/digest snapshots): not read-only, not local-write-only.
+			options = append(options, mcplib.WithDestructiveHintAnnotation(false), mcplib.WithOpenWorldHintAnnotation(true))
 		}
 		tool := mcplib.NewTool(toolName, options...)
 		if tool.Meta == nil {

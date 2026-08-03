@@ -35,7 +35,7 @@ func newStormCmd(flags *rootFlags) *cobra.Command {
 		Short:       "Active tropical cyclone: position, intensity, movement, forecast, and wind signals",
 		Long:        "Combine the PAGASA synopsis with the severe-weather-bulletin index so agents get the active cyclone name, center coordinates, intensity, movement, forecast track, bulletin PDFs, and per-locality wind-signal breakdown in one call. Independent pages are fetched in parallel. Reports active:false when no cyclone is being tracked.",
 		Example:     "  pagasa-pp-cli storm --json",
-		Annotations: map[string]string{"mcp:read-only": "true"},
+		Annotations: map[string]string{"mcp:read-only": "true", "mcp:open-world": "true"},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if dryRunOK(flags) {
 				fmt.Fprintln(cmd.OutOrStdout(), "would fetch /weather and /tropical-cyclone/severe-weather-bulletin")

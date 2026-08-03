@@ -23,7 +23,7 @@ func newForecastCmd(flags *rootFlags) *cobra.Command {
   pagasa-pp-cli forecast --city "Metro Manila" --json
   pagasa-pp-cli forecast --list-cities
   pagasa-pp-cli forecast --json`, "\n"),
-		Annotations: map[string]string{"mcp:read-only": "true"},
+		Annotations: map[string]string{"mcp:read-only": "true", "mcp:open-world": "true"},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if dryRunOK(flags) {
 				fmt.Fprintln(cmd.OutOrStdout(), "would fetch /weather/weather-outlook-selected-philippine-cities")
