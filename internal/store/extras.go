@@ -16,8 +16,28 @@ import (
 // idempotent with CREATE TABLE IF NOT EXISTS / CREATE INDEX IF NOT EXISTS so
 // every store open can safely re-run them.
 func (s *Store) migrateExtras(ctx context.Context, conn *sql.Conn) error {
+	// Additive only — do not bump StoreSchemaVersion for aws_obs so older
+	// binaries that share data.db keep opening (they ignore unknown tables).
 	migrations := []string{
-		// Add CREATE TABLE IF NOT EXISTS statements here.
+		`CREATE TABLE IF NOT EXISTS aws_obs (
+			station_id TEXT NOT NULL,
+			observed_at TEXT NOT NULL,
+			captured_at TEXT NOT NULL,
+			station_name TEXT,
+			temp_c REAL,
+			humidity_pct REAL,
+			wind_kmh REAL,
+			wind_dir TEXT,
+			precip_mm_hr REAL,
+			pressure REAL,
+			solar REAL,
+			data TEXT,
+			PRIMARY KEY (station_id, observed_at)
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_aws_obs_station_observed
+			ON aws_obs (station_id, observed_at DESC)`,
+		`CREATE INDEX IF NOT EXISTS idx_aws_obs_observed
+			ON aws_obs (observed_at)`,
 	}
 	for _, m := range migrations {
 		if _, err := conn.ExecContext(ctx, m); err != nil {

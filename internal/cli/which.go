@@ -32,6 +32,8 @@ var whichIndex = []whichEntry{
 	{Command: "watch", Description: "Report the wind-signal state for a locality, honest empty when clear.", Group: "Family-safety triggers", WhyItMatters: "Direct family-safety trigger for a specific area."},
 	{Command: "approach", Description: "Summarize an active storm's track relative to a fixed location.", Group: "Family-safety triggers", WhyItMatters: "Turns a track into a distance/ETA answer for one place."},
 	{Command: "digest", Description: "One payload combining synopsis, city forecast, and signal state.", Group: "Agent-native plumbing", WhyItMatters: "One call replaces three scrapes for a briefing agent."},
+	{Command: "obs", Description: "PAGASA AWS station observations — live temperature humidity wind precip from the automated weather station table.", Group: "Station observations", WhyItMatters: "Near-real-time Philippine station table; not a global open-meteo substitute."},
+	{Command: "obs history", Description: "Local series of AWS station observations built by obs --capture over time.", Group: "Station observations", WhyItMatters: "PAGASA serves only the latest station snapshot; local capture is how series compound."},
 }
 
 // whichMatch pairs an index entry with its ranking score for a query.
