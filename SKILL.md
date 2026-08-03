@@ -1,7 +1,7 @@
 ---
 name: pp-pagasa
 description: "Every PAGASA public weather surface as one agent-native CLI — synopsis, city forecast, and live cyclone signals, with a local history no PAGASA page keeps. Trigger phrases: `philippine weather`, `pagasa forecast`, `is there a storm`, `weather signal in my area`, `use pagasa`, `run pagasa`."
-version: "1.3.0"
+version: "1.4.0"
 author: "Nestor G Pestelos Jr"
 license: "Apache-2.0"
 argument-hint: "<command> [args] | install cli|mcp"
@@ -45,6 +45,7 @@ MCP: `go install .../pagasa-pp-mcp@latest` → `claude mcp add pagasa-pp-mcp -- 
 |------|-------------|
 | Global weather | open-meteo |
 | Official TenDay JSON API | PAGASA token this CLI does **not** have |
+| PH AWS station latest / local series | this CLI `obs` / `obs history` (not open-meteo) |
 
 ## Core commands
 
@@ -56,8 +57,13 @@ MCP: `go install .../pagasa-pp-mcp@latest` → `claude mcp add pagasa-pp-mcp -- 
 | Locality signal state | `pagasa-pp-cli watch --area Mandaluyong --json` |
 | Storm evolution | `pagasa-pp-cli history --limit 10 --json` |
 | Forecast change | `pagasa-pp-cli drift --city "Metro Manila" --json` |
+| Station observations (AWS latest) | `pagasa-pp-cli obs --station 98 --json` or `--station "Science Garden"` |
+| Capture station row for local series | `pagasa-pp-cli obs --capture --agent` (cron; empty history until this runs) |
+| Local AWS series | `pagasa-pp-cli obs history --station 98 --limit 24 --json` |
 | NL → command | `pagasa-pp-cli which "<capability>"` (exit 0 = match, 2 = none → `--help`) |
 | Health | `pagasa-pp-cli doctor` · `doctor --fail-on warn` |
+
+**Grain note:** `history` = synopsis/cyclone snapshots. `obs history` = station AWS series. PAGASA AWS page is latest-only; series = scheduled `--capture`.
 
 ### Link scrapes (when needed)
 
