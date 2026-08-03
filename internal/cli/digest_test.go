@@ -54,3 +54,21 @@ func TestNowAndDigestNotMCPReadOnly(t *testing.T) {
 		}
 	}
 }
+
+// TestLiveScrapersMCPOpenWorld pins #24 annotations on pure network RO tools
+// (walker tests cover hint mapping; this covers real RootCmd wiring).
+func TestLiveScrapersMCPOpenWorld(t *testing.T) {
+	root := newRootCmd(&rootFlags{})
+	for _, name := range []string{"storm", "forecast", "watch", "approach"} {
+		cmd, _, err := root.Find([]string{name})
+		if err != nil || cmd == nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		if cmd.Annotations["mcp:read-only"] != "true" {
+			t.Errorf("%s: want mcp:read-only", name)
+		}
+		if cmd.Annotations["mcp:open-world"] != "true" {
+			t.Errorf("%s: want mcp:open-world (issue #24)", name)
+		}
+	}
+}
