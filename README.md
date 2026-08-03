@@ -104,6 +104,10 @@ pagasa-pp-cli now --agent          # JSON + non-interactive in one flag
 pagasa-pp-cli storm --dry-run      # show what would be fetched, no request
 ```
 
+## Changelog
+
+User-visible changes are tracked in **[CHANGELOG.md](CHANGELOG.md)** (Keep a Changelog). Unreleased work sits under `[Unreleased]` until the next `vX.Y.Z` tag; that section is also the source text for GitHub Release notes.
+
 ## Development
 
 ```bash
