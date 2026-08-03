@@ -30,3 +30,23 @@ func TestNovelDigestHelpWires(t *testing.T) {
 		}
 	}
 }
+
+// TestNowAndDigestNotMCPReadOnly guards issue #23: both commands call
+// saveSnapshot (local SQLite) after live fetch, so they must not advertise
+// mcp:read-only → readOnlyHint=true. Parallel to TestObsNotMCPReadOnly_HistoryIs.
+func TestNowAndDigestNotMCPReadOnly(t *testing.T) {
+	root := newRootCmd(&rootFlags{})
+	for _, name := range []string{"now", "digest"} {
+		cmd, _, err := root.Find([]string{name})
+		if err != nil || cmd == nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		if cmd.Annotations["mcp:read-only"] == "true" {
+			t.Errorf("%s must not be mcp:read-only (saveSnapshot mutates local store)", name)
+		}
+		// local-write would set openWorldHint=false while these still scrape PAGASA.
+		if cmd.Annotations["mcp:local-write"] == "true" {
+			t.Errorf("%s must not be mcp:local-write (open-world HTTP; local-write forces openWorld=false)", name)
+		}
+	}
+}
