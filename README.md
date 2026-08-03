@@ -18,7 +18,7 @@ go install github.com/ngpestelos/pagasa-pp-cli/cmd/pagasa-pp-cli@latest
 
 The binary installs to `$(go env GOPATH)/bin` (usually `~/go/bin`); make sure that's on your `PATH`.
 
-Or use the one-shot installer (idempotent; retries the checksum-DB fetch; installs to `~/.local/bin`):
+Or use the one-shot installer (idempotent; verifies release `checksums.txt` SHA256 before extract; `go install` fallback retries the module checksum-DB fetch; installs to `~/.local/bin`):
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/ngpestelos/pagasa-pp-cli/main/scripts/install.sh | bash
