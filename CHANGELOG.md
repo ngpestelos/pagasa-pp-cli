@@ -28,6 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+- **MCP shell-out**: block root `--rate-limit` on mirrored Cobra tools so agents cannot pass `--rate-limit 0` and disable polite HTTP pacing (typed tools already hardcode rate 2) ([#25](https://github.com/ngpestelos/pagasa-pp-cli/issues/25)).
 - **now / digest**: drop false `mcp:read-only` annotations — both always `saveSnapshot` into local SQLite after live fetch; do not use `mcp:local-write` (would force `openWorldHint=false` while still scraping PAGASA) ([#33](https://github.com/ngpestelos/pagasa-pp-cli/pull/33), [#23](https://github.com/ngpestelos/pagasa-pp-cli/issues/23)).
 - **install.sh**: prebuilt path verifies release `checksums.txt` SHA256 before extract; extracts only `pagasa-pp-cli` + `pagasa-pp-mcp`; fails closed on mismatch or missing checksum entry ([#31](https://github.com/ngpestelos/pagasa-pp-cli/pull/31), [#21](https://github.com/ngpestelos/pagasa-pp-cli/issues/21)).
 - **install.sh**: harden fail-closed path under `set -euo pipefail` (awk field match + loud `die` on missing entry); soft-skip prebuilt when no digest tool; reject non-regular (symlink) extract members; `go install` installs CLI and MCP ([#32](https://github.com/ngpestelos/pagasa-pp-cli/pull/32)).

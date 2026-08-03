@@ -57,19 +57,20 @@ func TestSplitShellArgs(t *testing.T) {
 // string), the root flags listed in blockedRootFlags must be dropped
 // before they reach exec.CommandContext. A regression here would let a
 // caller redirect --base-url, swap --token, switch --client filesystems,
-// relocate the CLI's filesystem roots via --home, or load a malicious
-// --config.
+// relocate the CLI's filesystem roots via --home, load a malicious
+// --config, or disable polite pacing with --rate-limit 0 (#25).
 func TestCliArgsFromMCP_BlocksRootFlags(t *testing.T) {
 	in := map[string]any{
-		"args":     "contacts",
-		"base-url": "https://evil.example.com",
-		"client":   "attacker-client",
-		"config":   "/tmp/evil.yaml",
-		"deliver":  "fd:3",
-		"home":     "/tmp/evil-home",
-		"insecure": true,
-		"profile":  "attacker",
-		"token":    "stolen-token",
+		"args":       "contacts",
+		"base-url":   "https://evil.example.com",
+		"client":     "attacker-client",
+		"config":     "/tmp/evil.yaml",
+		"deliver":    "fd:3",
+		"home":       "/tmp/evil-home",
+		"insecure":   true,
+		"profile":    "attacker",
+		"rate-limit": float64(0),
+		"token":      "stolen-token",
 		// Keys containing "=" must not be emitted verbatim as flag=value.
 		"base-url=https://evil.example.com": true,
 		"config=/tmp/evil.yaml":             true,
@@ -78,27 +79,47 @@ func TestCliArgsFromMCP_BlocksRootFlags(t *testing.T) {
 		// Allowed per-command flag passes through.
 		"limit": float64(10),
 	}
-	got := cliArgsFromMCP(in, map[string]bool{
-		"args":     true,
-		"base-url": true,
-		"client":   true,
-		"config":   true,
-		"deliver":  true,
-		"home":     true,
-		"insecure": true,
-		"profile":  true,
-		"token":    true,
-	})
+	// Mirror the production blocklist (+ reserved "args") so the test fails
+	// if blockedRootFlags gains a name that cliArgsFromMCP does not honor.
+	blocked := map[string]bool{"args": true}
+	for k, v := range blockedRootFlags {
+		blocked[k] = v
+	}
+	got := cliArgsFromMCP(in, blocked)
 	want := []string{"--limit", "10"}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("cliArgsFromMCP dropped/kept wrong keys: got %v, want %v", got, want)
 	}
-	for _, blocked := range []string{"--base-url", "--client", "--config", "--deliver", "--home", "--insecure", "--profile", "--token", "--args"} {
+	for name := range blockedRootFlags {
+		flag := "--" + name
 		for _, tok := range got {
-			if tok == blocked {
-				t.Errorf("blocked flag %q leaked through cliArgsFromMCP", blocked)
+			if tok == flag {
+				t.Errorf("blocked flag %q leaked through cliArgsFromMCP", flag)
 			}
 		}
+	}
+	for _, tok := range got {
+		if tok == "--args" {
+			t.Error("reserved --args leaked through cliArgsFromMCP")
+		}
+	}
+}
+
+// TestBlockedRootFlags_IncludesRateLimit is the #25 pin: MCP shell-out must
+// not expose or forward --rate-limit (including 0, which disables the client
+// limiter). Typed tools use defaultMCPRateLimit; shell-out keeps CLI default 2.
+func TestBlockedRootFlags_IncludesRateLimit(t *testing.T) {
+	if !blockedRootFlags["rate-limit"] {
+		t.Fatal("blockedRootFlags must include rate-limit (issue #25)")
+	}
+	root := &cobra.Command{Use: "root"}
+	root.PersistentFlags().Float64("rate-limit", 2, "max rps")
+	root.PersistentFlags().String("config", "", "config")
+	child := &cobra.Command{Use: "now"}
+	root.AddCommand(child)
+	blocked := blockedStructuredArgsForCommand(child)
+	if !blocked["rate-limit"] {
+		t.Fatalf("inherited root --rate-limit must be blocked for MCP shell-out: %#v", blocked)
 	}
 }
 
