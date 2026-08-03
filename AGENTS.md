@@ -67,7 +67,22 @@ For install, auth, examples, and longer product guidance, read `README.md` and `
 
 ## Release Ledger
 
-`CHANGELOG.md` and `.printing-press-release.json` are the public library's per-CLI release ledger. Fresh prints carry an unstamped runtime version such as `0.0.0-dev`; the final `YYYY.M.N` CLI release version is assigned only after a publish PR merges in `mvanhorn/printing-press-library`. Do not hand-bump those files or edit `var version = ...` for release bookkeeping; preserve existing ledger files on reprint and let the library workflow stamp the next release.
+### This public fork (SSOT)
+
+**[`CHANGELOG.md`](CHANGELOG.md)** is the hand-maintained release ledger for `ngpestelos/pagasa-pp-cli`.
+
+| When | What |
+|------|------|
+| **Every user-visible PR** | Add bullets under `## [Unreleased]` (`Added` / `Changed` / `Fixed` / `Security` / …). Same PR as the code. |
+| **Tag `vX.Y.Z`** | Move `[Unreleased]` → `## [X.Y.Z] - YYYY-MM-DD` (Keep a Changelog / ISO date, Manila calendar day), update compare links at bottom, paste that section into the GitHub Release body. |
+| **GoReleaser** | `changelog.disable: true` — do **not** depend on auto-generated notes. |
+| **Review bar** | Missing changelog for a user-visible change is a review finding (NIT only for pure refactors with no behavior change). |
+
+Binary version still comes from goreleaser ldflags / runtime `resolveVersion` — do not hand-edit a `var version = …` for bookkeeping.
+
+### Printing Press library context
+
+Upstream PP library repos also use `CHANGELOG.md` + `.printing-press-release.json` stamped by library publish automation (`YYYY.M.N`). This fork is **not** that pipeline: we use semver tags (`v0.1.x`) and own the changelog here. On full reprint, re-apply intent from `.printing-press-patches/` (including the changelog-standard patch) so `CHANGELOG.md` is not dropped without a deliberate decision.
 
 ## Local Customizations
 
