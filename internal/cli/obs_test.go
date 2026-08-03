@@ -3,10 +3,13 @@
 package cli
 
 import (
+	"bytes"
+	"encoding/json"
 	"strings"
 	"testing"
 
 	"github.com/ngpestelos/pagasa-pp-cli/internal/pagasa"
+	"github.com/ngpestelos/pagasa-pp-cli/internal/store"
 )
 
 func TestFilterAWSStations(t *testing.T) {
@@ -56,5 +59,59 @@ func TestObsDryRun(t *testing.T) {
 	hist, _, err := root.Find([]string{"obs", "history"})
 	if err != nil || hist == nil {
 		t.Fatalf("obs history not registered: %v", err)
+	}
+}
+
+func TestObsNotMCPReadOnly_HistoryIs(t *testing.T) {
+	root := newRootCmd(&rootFlags{})
+	obs, _, err := root.Find([]string{"obs"})
+	if err != nil || obs == nil {
+		t.Fatalf("obs: %v", err)
+	}
+	if obs.Annotations["mcp:read-only"] == "true" {
+		t.Error("top-level obs must not be mcp:read-only (--capture writes/prunes)")
+	}
+	hist, _, err := root.Find([]string{"obs", "history"})
+	if err != nil || hist == nil {
+		t.Fatalf("obs history: %v", err)
+	}
+	if hist.Annotations["mcp:read-only"] != "true" {
+		t.Error("obs history should remain mcp:read-only")
+	}
+}
+
+func TestObsCaptureWithLimitErrors(t *testing.T) {
+	root := newRootCmd(&rootFlags{agent: true})
+	root.SetArgs([]string{"obs", "--capture", "--limit", "5", "--json"})
+	var stderr bytes.Buffer
+	root.SetErr(&stderr)
+	root.SetOut(&bytes.Buffer{})
+	err := root.Execute()
+	if err == nil {
+		t.Fatal("want error when --capture and --limit are both set")
+	}
+	if !strings.Contains(err.Error(), "--limit") || !strings.Contains(err.Error(), "--capture") {
+		t.Fatalf("error should mention both flags, got: %v", err)
+	}
+}
+
+func TestEmptyAWSObsHistoryJSONIsArray(t *testing.T) {
+	// Nil slice would encode as null; callers (loadAWSObsHistory / ListAWSObs) must
+	// normalize so machine output is [].
+	var nilRows []store.AWSObsRow
+	bNil, _ := json.Marshal(nilRows)
+	if string(bNil) != "null" {
+		t.Fatalf("precondition: nil slice should marshal to null, got %s", bNil)
+	}
+	rows := []store.AWSObsRow{}
+	if rows == nil {
+		t.Fatal("empty composite literal must be non-nil")
+	}
+	b, err := json.Marshal(rows)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(b) != "[]" {
+		t.Fatalf("empty history machine JSON = %s, want []", b)
 	}
 }

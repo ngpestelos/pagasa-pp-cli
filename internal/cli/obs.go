@@ -31,12 +31,12 @@ func init() {
 }
 
 type obsCaptureResult struct {
-	Written  int               `json:"written"`
-	Skipped  int               `json:"skipped"`
-	Pruned   int64             `json:"pruned"`
+	Written  int                 `json:"written"`
+	Skipped  int                 `json:"skipped"`
+	Pruned   int64               `json:"pruned"`
 	Stations []pagasa.AWSStation `json:"stations,omitempty"`
-	Source   string            `json:"source"`
-	Fetched  int               `json:"fetched"`
+	Source   string              `json:"source"`
+	Fetched  int                 `json:"fetched"`
 }
 
 func newObsCmd(flags *rootFlags) *cobra.Command {
@@ -52,7 +52,8 @@ func newObsCmd(flags *rootFlags) *cobra.Command {
 
 PAGASA publishes only the latest snapshot per station — not multi-hour history.
 Local series require --capture on a schedule (e.g. cron every 10–15 minutes), then
-query with "obs history". Default "obs" is live read-only (no store write).
+query with "obs history". Default "obs" is live (no store write); --capture writes
+and prunes local aws_obs (not MCP read-only).
 
 Not a 60-minute METAR product; station Last Updated stamps are typically ~5–10 minutes.`,
 		Example: `  pagasa-pp-cli obs --json
@@ -60,12 +61,14 @@ Not a 60-minute METAR product; station Last Updated stamps are typically ~5–10
   pagasa-pp-cli obs --station "Science Garden" --json
   pagasa-pp-cli obs --capture --agent
   pagasa-pp-cli obs history --station 98 --limit 24 --json`,
-		Annotations: map[string]string{
-			"mcp:read-only": "true", // default path; --capture also writes local store (open-world HTTP)
-		},
+		// No mcp:read-only: --capture writes/prunes local store and hits open-world HTTP.
+		// obs history remains read-only (see subcommand annotations).
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if err := validateDataSourceStrategy(flags, "live"); err != nil {
 				return err
+			}
+			if capture && limit > 0 {
+				return fmt.Errorf("--limit is for live display only; omit --limit when using --capture (capture stores all matched stations)")
 			}
 			if dryRunOK(flags) {
 				if capture {
@@ -83,7 +86,8 @@ Not a 60-minute METAR product; station Last Updated stamps are typically ~5–10
 				return classifyAPIError(err, flags)
 			}
 			stations = filterAWSStations(stations, station)
-			if limit > 0 && len(stations) > limit {
+			// --limit applies only to live display, never to capture (footgun: partial series).
+			if !capture && limit > 0 && len(stations) > limit {
 				stations = stations[:limit]
 			}
 
@@ -122,7 +126,7 @@ Not a 60-minute METAR product; station Last Updated stamps are typically ~5–10
 	}
 	cmd.Flags().StringVar(&station, "station", "", "filter by site id or station name substring")
 	cmd.Flags().BoolVar(&capture, "capture", false, "write scraped rows to local aws_obs and prune retention (for cron)")
-	cmd.Flags().IntVar(&limit, "limit", 0, "max stations to return (0 = all matched)")
+	cmd.Flags().IntVar(&limit, "limit", 0, "max stations for live display only; incompatible with --capture (0 = all matched)")
 
 	cmd.AddCommand(newObsHistoryCmd(flags))
 	return cmd
@@ -158,6 +162,9 @@ Series grain follows PAGASA Last Updated stamps, not capture interval.`,
 			if err != nil {
 				return err
 			}
+			if rows == nil {
+				rows = []store.AWSObsRow{}
+			}
 			if machineOut(cmd, flags) {
 				return printJSONFiltered(cmd.OutOrStdout(), rows, flags)
 			}
@@ -185,7 +192,9 @@ func fetchAWSStations(ctx context.Context, flags *rootFlags) ([]pagasa.AWSStatio
 	if err != nil {
 		return nil, err
 	}
-	raw, err := c.Get(ctx, awsStationsPath, nil)
+	// Bypass HTTP cache so live/cron always see the current AWS table
+	// (default Get may serve a 5-minute cached body).
+	raw, err := c.GetNoCache(ctx, awsStationsPath, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -286,7 +295,7 @@ func captureAWSStations(ctx context.Context, stations []pagasa.AWSStation) (obsC
 func loadAWSObsHistory(ctx context.Context, station string, limit int) ([]store.AWSObsRow, error) {
 	dbPath := defaultDBPath("pagasa-pp-cli")
 	if _, err := os.Stat(dbPath); os.IsNotExist(err) {
-		return nil, nil
+		return []store.AWSObsRow{}, nil
 	}
 	// Prefer RO so we don't force a migrate/write when the user only queries.
 	// Missing aws_obs table → empty list (ListAWSObs contract).
@@ -299,5 +308,12 @@ func loadAWSObsHistory(ctx context.Context, station string, limit int) ([]store.
 		}
 	}
 	defer db.Close()
-	return db.ListAWSObs(ctx, station, limit)
+	rows, err := db.ListAWSObs(ctx, station, limit)
+	if err != nil {
+		return nil, err
+	}
+	if rows == nil {
+		return []store.AWSObsRow{}, nil
+	}
+	return rows, nil
 }

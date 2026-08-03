@@ -19,8 +19,8 @@ const DefaultAWSObsRetention = 14 * 24 * time.Hour
 type AWSObsRow struct {
 	StationID   string          `json:"station_id"`
 	StationName string          `json:"station_name,omitempty"`
-	ObservedAt  string          `json:"observed_at"`  // RFC3339 UTC
-	CapturedAt  string          `json:"captured_at"`  // RFC3339 UTC
+	ObservedAt  string          `json:"observed_at"` // RFC3339 UTC
+	CapturedAt  string          `json:"captured_at"` // RFC3339 UTC
 	TempC       *float64        `json:"temp_c,omitempty"`
 	HumidityPct *float64        `json:"humidity_pct,omitempty"`
 	WindKmh     *float64        `json:"wind_kmh,omitempty"`
@@ -152,17 +152,18 @@ func (s *Store) UpsertAWSObsBatch(ctx context.Context, rows []AWSObsRow) (writte
 
 // ListAWSObs returns observations newest-first. stationFilter matches station_id
 // exactly or station_name case-insensitive substring when non-empty.
-// Missing table (pre-migrate RO open) returns empty slice, not error.
+// Missing table (pre-migrate RO open) returns a non-nil empty slice, not error.
+// The data blob is stored for capture but not surfaced on list (typed columns only).
 func (s *Store) ListAWSObs(ctx context.Context, stationFilter string, limit int) ([]AWSObsRow, error) {
 	if limit <= 0 {
 		limit = 20
 	}
 	q := `SELECT station_id, observed_at, captured_at, COALESCE(station_name, ''),
-		temp_c, humidity_pct, wind_kmh, COALESCE(wind_dir, ''), precip_mm_hr, pressure, solar, data
+		temp_c, humidity_pct, wind_kmh, COALESCE(wind_dir, ''), precip_mm_hr, pressure, solar
 		FROM aws_obs`
 	args := []any{}
 	if f := strings.TrimSpace(stationFilter); f != "" {
-		q += ` WHERE station_id = ? OR LOWER(station_name) LIKE ?`
+		q += ` WHERE station_id = ? OR LOWER(station_name) LIKE ? ESCAPE '\'`
 		args = append(args, f, "%"+strings.ToLower(escapeLike(f))+"%")
 	}
 	q += ` ORDER BY observed_at DESC LIMIT ?`
@@ -171,20 +172,19 @@ func (s *Store) ListAWSObs(ctx context.Context, stationFilter string, limit int)
 	rows, err := s.db.QueryContext(ctx, q, args...)
 	if err != nil {
 		if isMissingTable(err, "aws_obs") {
-			return nil, nil
+			return []AWSObsRow{}, nil
 		}
 		return nil, err
 	}
 	defer rows.Close()
 
-	var out []AWSObsRow
+	out := make([]AWSObsRow, 0)
 	for rows.Next() {
 		var r AWSObsRow
 		var temp, hum, wind, precip, pressure, solar sql.NullFloat64
-		var data sql.NullString
 		if err := rows.Scan(
 			&r.StationID, &r.ObservedAt, &r.CapturedAt, &r.StationName,
-			&temp, &hum, &wind, &r.WindDir, &precip, &pressure, &solar, &data,
+			&temp, &hum, &wind, &r.WindDir, &precip, &pressure, &solar,
 		); err != nil {
 			return nil, err
 		}
@@ -194,12 +194,12 @@ func (s *Store) ListAWSObs(ctx context.Context, stationFilter string, limit int)
 		r.PrecipMmHr = nullFloatPtr(precip)
 		r.Pressure = nullFloatPtr(pressure)
 		r.Solar = nullFloatPtr(solar)
-		if data.Valid {
-			r.Data = json.RawMessage(data.String)
-		}
 		out = append(out, r)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 // PruneAWSObs deletes rows older than maxAge by observed_at. Non-positive maxAge
