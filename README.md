@@ -63,14 +63,30 @@ Add `--json` (or `--agent`) to any command for machine output; output is auto-JS
 | `digest --city <name>` | Synopsis + a city's forecast + active-storm bulletins in one payload (pages fetched in parallel). Persists a local snapshot. |
 | `history` | Past synopsis/cyclone snapshots recorded locally (PAGASA serves only the latest). Empty until you've run `digest`/`now`/`storm` over time. |
 | `drift --city <name>` | How a city's forecast changed across recorded snapshots. Needs at least two snapshots for the city. |
+| `obs` | Latest **Automated Weather Stations** table (temp, humidity, wind, precip, pressure, solar). Live read; optional `--station` filter. Host: `bagong.pagasa.dost.gov.ph`. |
+| `obs --capture` | Same scrape **plus** write to local `aws_obs` and prune rows older than 14 days. Use from cron for a local series. |
+| `obs history` | Local AWS series (empty until captures exist). Distinct from synopsis `history`. |
 
 Run `pagasa-pp-cli --help` for the full command tree, including the raw page-extraction commands (`weather`, `climate`, `tropical-cyclone`) and the local-store utilities.
+
+### AWS station series (local)
+
+PAGASA's AWS page publishes **only the latest snapshot** per station (typically stamps every ~5–10 minutes). This CLI does not invent multi-hour history from a single request. To build a series:
+
+```bash
+# every 10–15 minutes (launchd/systemd/cron — not installed by install.sh)
+pagasa-pp-cli obs --capture --agent
+pagasa-pp-cli obs history --station 98 --limit 48 --json
+```
+
+Empty `obs history` after upgrade is expected until the first capture. Prune is irreversible (14-day default, capture path only). Global/non-PAGASA weather remains out of scope — use open-meteo.
 
 ## How it works
 
 - **`www.pagasa.dost.gov.ph`** — server-rendered HTML. The synopsis lives in a `panel-body`; each of 18 cities is an accordion panel with a day-by-day forecast table; the severe-weather-bulletin page links the current cyclone's artifacts. The `internal/pagasa` package parses these into typed Go values (with tests).
+- **`bagong.pagasa.dost.gov.ph`** — Automated Weather Stations table (`obs`). Separate host from the default BaseURL; typed `aws_obs` rows, not synopsis snapshots.
 - **`pubfiles.pagasa.dost.gov.ph`** — the bulletin PDFs and wind-signal PNGs, served over plain HTTP.
-- **Local SQLite mirror** — `now`, `storm`, and `digest` persist a snapshot each run, which `history` and `drift` read back. Nothing leaves your machine.
+- **Local SQLite mirror** — `now`, `storm`, and `digest` persist synopsis snapshots (`history` / `drift`). `obs --capture` persists station rows in `aws_obs`. Schema additions for `aws_obs` are additive (no one-way stamp bump). Nothing leaves your machine.
 
 HTML extraction is inherently brittle: if PAGASA restructures a page, the matching extractor can break until updated. That's the trade-off for a site with no official public JSON API.
 
