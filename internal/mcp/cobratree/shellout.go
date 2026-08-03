@@ -193,17 +193,21 @@ var reservedStructuredArgs = map[string]bool{
 // able to override via structured tool parameters. Allowing them lets a
 // caller swap auth credentials, redirect the API base URL, select a different
 // per-client filesystem, relocate the config/data/state/cache roots, load a
-// malicious config file, or change the delivery target, all of which sit
-// outside the per-command surface the agent is supposed to be calling.
+// malicious config file, change the delivery target, or disable polite HTTP
+// pacing with --rate-limit 0, all of which sit outside the per-command surface
+// the agent is supposed to be calling. Typed MCP tools hardcode polite rate 2;
+// shell-out mirrors keep the CLI default (also 2) by refusing agent overrides
+// of rate-limit (issue #25).
 var blockedRootFlags = map[string]bool{
-	"base-url": true,
-	"client":   true,
-	"config":   true,
-	"deliver":  true,
-	"home":     true,
-	"insecure": true,
-	"profile":  true,
-	"token":    true,
+	"base-url":   true,
+	"client":     true,
+	"config":     true,
+	"deliver":    true,
+	"home":       true,
+	"insecure":   true,
+	"profile":    true,
+	"rate-limit": true,
+	"token":      true,
 }
 
 func cliArgsFromMCP(args map[string]any, blocked map[string]bool) []string {
