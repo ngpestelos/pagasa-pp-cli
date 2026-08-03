@@ -51,48 +51,70 @@ case "$(uname -m)" in
   *) arch="" ;;
 esac
 
+# True if path is a regular file (not a symlink). Avoid planting links under GOBIN.
+is_regular_file() {
+  [ -f "$1" ] && [ ! -L "$1" ]
+}
+
 install_ok=false
 if [ -n "$arch" ] && command -v curl >/dev/null 2>&1; then
-  # Resolve the latest release tag (public repo, no auth needed).
-  ver="$(curl -fsSL "https://api.github.com/repos/${OWNER_REPO}/releases/latest" 2>/dev/null \
-    | sed -n 's/.*"tag_name": *"v\{0,1\}\([^"]*\)".*/\1/p' | head -1)"
-  if [ -n "$ver" ]; then
-    tarball="pagasa-pp-cli_${ver}_${os}_${arch}.tar.gz"
-    url="https://github.com/${OWNER_REPO}/releases/download/v${ver}/${tarball}"
-    csum_url="https://github.com/${OWNER_REPO}/releases/download/v${ver}/checksums.txt"
-    log "Downloading prebuilt $BIN v$ver ($os/$arch)"
-    tmp="$(mktemp -d)"
-    # shellcheck disable=SC2064
-    trap 'rm -rf "$tmp"' EXIT
+  # Digest tools are required for the prebuilt integrity path. Missing tools
+  # is not an integrity failure — skip prebuilt and allow go install fallback.
+  if ! command -v sha256sum >/dev/null 2>&1 && ! command -v shasum >/dev/null 2>&1; then
+    warn "neither sha256sum nor shasum found; skipping prebuilt (will try go install)."
+  else
+    # Resolve the latest release tag (public repo, no auth needed).
+    # || true so set -e/pipefail does not abort when sed/grep find no match
+    # (API empty/offline) — that path should fall through to go install.
+    ver="$(
+      { curl -fsSL "https://api.github.com/repos/${OWNER_REPO}/releases/latest" 2>/dev/null \
+        | sed -n 's/.*"tag_name": *"v\{0,1\}\([^"]*\)".*/\1/p' | head -1; } || true
+    )"
+    if [ -n "$ver" ]; then
+      tarball="pagasa-pp-cli_${ver}_${os}_${arch}.tar.gz"
+      url="https://github.com/${OWNER_REPO}/releases/download/v${ver}/${tarball}"
+      csum_url="https://github.com/${OWNER_REPO}/releases/download/v${ver}/checksums.txt"
+      log "Downloading prebuilt $BIN v$ver ($os/$arch)"
+      tmp="$(mktemp -d)"
+      # shellcheck disable=SC2064
+      trap 'rm -rf "$tmp"' EXIT
 
-    if ! curl -fsSL "$csum_url" -o "$tmp/checksums.txt" 2>/dev/null; then
-      warn "could not fetch checksums.txt for v$ver; will try building from source."
-    elif ! curl -fsSL "$url" -o "$tmp/$tarball" 2>/dev/null; then
-      warn "prebuilt download failed ($url); will try building from source."
-    else
-      expected="$(grep -E "[[:space:]]${tarball}\$" "$tmp/checksums.txt" | awk '{print $1}' | head -1)"
-      if [ -z "$expected" ]; then
-        # Missing entry is an integrity gap — fail closed (do not extract).
-        die "no checksum entry for ${tarball} in release checksums.txt"
+      if ! curl -fsSL "$csum_url" -o "$tmp/checksums.txt" 2>/dev/null; then
+        warn "could not fetch checksums.txt for v$ver; will try building from source."
+      elif ! curl -fsSL "$url" -o "$tmp/$tarball" 2>/dev/null; then
+        warn "prebuilt download failed ($url); will try building from source."
+      else
+        # Field-equality match (not grep -E regex — dots in version are literal).
+        # || true so a missing line does not trip pipefail before the die below.
+        expected="$(
+          awk -v f="$tarball" '$2 == f { print $1; exit }' "$tmp/checksums.txt" || true
+        )"
+        if [ -z "$expected" ]; then
+          # Missing entry is an integrity gap — fail closed (do not extract).
+          die "no checksum entry for ${tarball} in release checksums.txt"
+        fi
+        if ! printf '%s' "$expected" | grep -Eq '^[0-9a-fA-F]{64}$'; then
+          die "malformed checksum for ${tarball} (want 64 hex digits, got: ${expected})"
+        fi
+        actual="$(file_sha256 "$tmp/$tarball")"
+        if [ "$actual" != "$expected" ]; then
+          die "checksum mismatch for ${tarball} (expected ${expected} got ${actual})"
+        fi
+        log "Checksum OK (${actual:0:12}…)"
+        # Extract only expected members — refuse unexpected tar paths.
+        if ! tar -xzf "$tmp/$tarball" -C "$GOBIN_DIR" "$BIN" "$MCP" 2>/dev/null; then
+          die "tar extract failed for ${tarball} (expected members: $BIN $MCP)"
+        fi
+        if ! is_regular_file "$GOBIN_DIR/$BIN" || ! is_regular_file "$GOBIN_DIR/$MCP"; then
+          die "extract missing regular-file members under $GOBIN_DIR (need $BIN + $MCP, not symlinks)"
+        fi
+        chmod +x "$GOBIN_DIR/$BIN" "$GOBIN_DIR/$MCP" 2>/dev/null || true
+        install_ok=true
       fi
-      actual="$(file_sha256 "$tmp/$tarball")"
-      if [ "$actual" != "$expected" ]; then
-        die "checksum mismatch for ${tarball} (expected ${expected} got ${actual})"
-      fi
-      log "Checksum OK (${actual:0:12}…)"
-      # Extract only expected members — refuse unexpected tar paths.
-      if ! tar -xzf "$tmp/$tarball" -C "$GOBIN_DIR" "$BIN" "$MCP" 2>/dev/null; then
-        die "tar extract failed for ${tarball} (expected members: $BIN $MCP)"
-      fi
-      if [ ! -f "$GOBIN_DIR/$BIN" ] || [ ! -f "$GOBIN_DIR/$MCP" ]; then
-        die "extract missing members under $GOBIN_DIR (need $BIN + $MCP)"
-      fi
-      chmod +x "$GOBIN_DIR/$BIN" "$GOBIN_DIR/$MCP" 2>/dev/null || true
-      install_ok=true
+
+      rm -rf "$tmp"
+      trap - EXIT
     fi
-
-    rm -rf "$tmp"
-    trap - EXIT
   fi
 fi
 
@@ -102,26 +124,34 @@ if [ "$install_ok" != true ]; then
   warn "Building from source — this compiles modernc.org/sqlite and is CPU-heavy."
   # A brand-new public module can 500 on sum.golang.org while the checksum DB
   # indexes it; retry a few times before giving up.
+  install_err="$(mktemp "${TMPDIR:-/tmp}/pagasa-install.XXXXXX.err")"
   for attempt in 1 2 3; do
-    if GOTOOLCHAIN=auto GOBIN="$GOBIN_DIR" go install "${MODULE}/cmd/${BIN}@latest" 2>/tmp/pagasa-install.err; then
+    if GOTOOLCHAIN=auto GOBIN="$GOBIN_DIR" go install \
+      "${MODULE}/cmd/${BIN}@latest" \
+      "${MODULE}/cmd/${MCP}@latest" \
+      2>"$install_err"; then
       install_ok=true
       break
     fi
-    if grep -q "sum.golang.org" /tmp/pagasa-install.err 2>/dev/null; then
+    if grep -q "sum.golang.org" "$install_err" 2>/dev/null; then
       warn "checksum DB not ready (attempt $attempt/3); retrying in 10s"
       sleep 10
     else
-      cat /tmp/pagasa-install.err >&2
+      cat "$install_err" >&2
       break
     fi
   done
-  rm -f /tmp/pagasa-install.err
+  rm -f "$install_err"
 fi
 [ "$install_ok" = true ] || die "install failed (neither prebuilt download nor go install worked)."
 
 # --- 3. Verify ---------------------------------------------------------------
 BIN_PATH="$GOBIN_DIR/$BIN"
+MCP_PATH="$GOBIN_DIR/$MCP"
 [ -x "$BIN_PATH" ] || die "binary not found at $BIN_PATH after install."
+if [ ! -x "$MCP_PATH" ]; then
+  warn "MCP binary missing at $MCP_PATH (CLI installed; install MCP separately if needed)."
+fi
 log "Installed: $("$BIN_PATH" --version 2>/dev/null || echo "$BIN (version unknown)")"
 "$BIN_PATH" now --dry-run >/dev/null 2>&1 && log "Smoke check passed (now --dry-run)." || warn "dry-run smoke check failed; the binary installed but check PATH/network."
 
