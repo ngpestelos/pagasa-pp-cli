@@ -33,7 +33,7 @@ func newNovelApproachCmd(flags *rootFlags) *cobra.Command {
 		Short:       "Distance from a fixed location to the active storm's center",
 		Long:        "Parse the active tropical cyclone's center coordinates from the PAGASA synopsis (bulletin location panel as fallback) and report the great-circle distance to a fixed --location \"lat,lon\". Independent pages are fetched in parallel. Reports active:false when no cyclone is being tracked.",
 		Example:     "  pagasa-pp-cli approach --location 14.58,121.03 --json",
-		Annotations: map[string]string{"mcp:read-only": "true"},
+		Annotations: map[string]string{"mcp:read-only": "true", "mcp:open-world": "true"},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) == 0 && cmd.Flags().NFlag() == 0 {
 				return cmd.Help()

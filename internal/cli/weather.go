@@ -12,7 +12,7 @@ func newWeatherCmd(flags *rootFlags) *cobra.Command {
 		Use:         "weather",
 		Short:       "Manage weather command groups",
 		Hidden:      true,
-		Annotations: map[string]string{"mcp:read-only": "true", "pp:typed-exit-codes": "0,2"},
+		Annotations: map[string]string{"mcp:read-only": "true", "mcp:open-world": "true", "pp:typed-exit-codes": "0,2"},
 		RunE:        parentNoSubcommandRunE(flags),
 	}
 

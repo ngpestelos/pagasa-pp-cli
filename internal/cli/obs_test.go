@@ -71,12 +71,18 @@ func TestObsNotMCPReadOnly_HistoryIs(t *testing.T) {
 	if obs.Annotations["mcp:read-only"] == "true" {
 		t.Error("top-level obs must not be mcp:read-only (--capture writes/prunes)")
 	}
+	if obs.Annotations["mcp:open-world"] != "true" {
+		t.Error("top-level obs must be mcp:open-world (bagong HTTP, issue #24)")
+	}
 	hist, _, err := root.Find([]string{"obs", "history"})
 	if err != nil || hist == nil {
 		t.Fatalf("obs history: %v", err)
 	}
 	if hist.Annotations["mcp:read-only"] != "true" {
 		t.Error("obs history should remain mcp:read-only")
+	}
+	if hist.Annotations["mcp:open-world"] == "true" {
+		t.Error("obs history is local store only — must not be mcp:open-world")
 	}
 }
 

@@ -28,6 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+- **MCP novel tools**: set `openWorldHint` for network scrapers via `mcp:open-world` (storm/forecast/watch/approach/weather/now/digest/obs); local read-only tools get `openWorldHint=false` so hosts do not over-approve PAGASA HTTP as local-only reads ([#24](https://github.com/ngpestelos/pagasa-pp-cli/issues/24)).
 - **MCP shell-out**: block root `--rate-limit` on mirrored Cobra tools so agents cannot pass `--rate-limit 0` and disable polite HTTP pacing (typed tools already hardcode rate 2) ([#25](https://github.com/ngpestelos/pagasa-pp-cli/issues/25)).
 - **now / digest**: drop false `mcp:read-only` annotations — both always `saveSnapshot` into local SQLite after live fetch; do not use `mcp:local-write` (would force `openWorldHint=false` while still scraping PAGASA) ([#33](https://github.com/ngpestelos/pagasa-pp-cli/pull/33), [#23](https://github.com/ngpestelos/pagasa-pp-cli/issues/23)).
 - **install.sh**: prebuilt path verifies release `checksums.txt` SHA256 before extract; extracts only `pagasa-pp-cli` + `pagasa-pp-mcp`; fails closed on mismatch or missing checksum entry ([#31](https://github.com/ngpestelos/pagasa-pp-cli/pull/31), [#21](https://github.com/ngpestelos/pagasa-pp-cli/issues/21)).

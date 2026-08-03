@@ -29,6 +29,13 @@ const (
 	// delete user-visible data keep honest destructive semantics and must
 	// not carry this annotation.
 	LocalWriteAnnotation = "mcp:local-write"
+	// OpenWorldAnnotation, when set to "true"/"1"/"yes", marks a command that
+	// performs outbound network I/O (PAGASA HTML scrapes, etc.). The walker
+	// sets openWorldHint=true so MCP hosts do not auto-approve them as
+	// local-only reads (issue #24). Pair with ReadOnlyAnnotation for pure
+	// network reads, or alone for network tools that also write locally
+	// (e.g. now/digest/obs snapshot or capture).
+	OpenWorldAnnotation = "mcp:open-world"
 	// PositionalWriteSinksAnnotation lists zero-based positional argument
 	// indexes that write to user-visible files when populated. It is enforced
 	// only on commands that also carry ReadOnlyAnnotation.
@@ -120,6 +127,10 @@ func isMCPReadOnly(cmd *cobra.Command) bool {
 
 func isMCPLocalWrite(cmd *cobra.Command) bool {
 	return annotationIsTrue(cmd, LocalWriteAnnotation)
+}
+
+func isMCPOpenWorld(cmd *cobra.Command) bool {
+	return annotationIsTrue(cmd, OpenWorldAnnotation)
 }
 
 func positionalWriteSinkIndexes(cmd *cobra.Command) map[int]bool {
