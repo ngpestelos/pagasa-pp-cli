@@ -26,9 +26,10 @@ func newNowCmd(flags *rootFlags) *cobra.Command {
 		Short:   "Current PAGASA weather synopsis and active cyclone, if any",
 		Long:    "Fetch the live PAGASA synopsis paragraph from the public weather page and extract the active tropical cyclone name and issuance time when present.",
 		Example: "  pagasa-pp-cli now --json",
-		Annotations: map[string]string{
-			"mcp:read-only": "true",
-		},
+		// No mcp:read-only: always best-effort saveSnapshot (local SQLite) after
+		// live fetch, and hits open-world HTTP. Not mcp:local-write either —
+		// that tier sets openWorldHint=false, which is wrong for PAGASA scrapes
+		// (see #23; openWorldHint for novel network tools is #24).
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if dryRunOK(flags) {
 				fmt.Fprintln(cmd.OutOrStdout(), "would fetch /weather synopsis")

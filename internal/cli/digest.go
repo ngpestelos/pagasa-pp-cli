@@ -29,8 +29,10 @@ func newNovelDigestCmd(flags *rootFlags) *cobra.Command {
 		Use:         "digest",
 		Short:       "One payload: synopsis + a city's forecast + active-storm bulletins",
 		Long:        "Compose the PAGASA synopsis, one city's multi-day forecast, and the active tropical-cyclone bulletins into a single agent-native payload — replacing three separate page scrapes. Fetches independent pages in parallel. Persists a local snapshot for history and drift.",
-		Example:     "  pagasa-pp-cli digest --city \"Metro Manila\" --json",
-		Annotations: map[string]string{"mcp:read-only": "true"},
+		Example: "  pagasa-pp-cli digest --city \"Metro Manila\" --json",
+		// No mcp:read-only: Long text and RunE persist a local snapshot for
+		// history/drift, and the command hits open-world HTTP. Not
+		// mcp:local-write (that forces openWorldHint=false). See #23 / #24.
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if dryRunOK(flags) {
 				fmt.Fprintln(cmd.OutOrStdout(), "would fetch synopsis, city forecast, and bulletin index")
