@@ -74,7 +74,7 @@ For install, auth, examples, and longer product guidance, read `README.md` and `
 | When | What |
 |------|------|
 | **Every user-visible PR** | Add bullets under `## [Unreleased]` (`Added` / `Changed` / `Fixed` / `Security` / …). Same PR as the code. |
-| **Tag `vX.Y.Z`** | Move `[Unreleased]` → `## [X.Y.Z] - YYYYMMDD` (or ISO date), update compare links at bottom, paste that section into the GitHub Release body. |
+| **Tag `vX.Y.Z`** | Move `[Unreleased]` → `## [X.Y.Z] - YYYY-MM-DD` (Keep a Changelog / ISO date, Manila calendar day), update compare links at bottom, paste that section into the GitHub Release body. |
 | **GoReleaser** | `changelog.disable: true` — do **not** depend on auto-generated notes. |
 | **Review bar** | Missing changelog for a user-visible change is a review finding (NIT only for pure refactors with no behavior change). |
 

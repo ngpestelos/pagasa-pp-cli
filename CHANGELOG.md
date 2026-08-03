@@ -30,11 +30,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **install.sh**: prebuilt path verifies release `checksums.txt` SHA256 before extract; extracts only `pagasa-pp-cli` + `pagasa-pp-mcp`; fails closed on mismatch or missing checksum entry ([#31](https://github.com/ngpestelos/pagasa-pp-cli/pull/31), [#21](https://github.com/ngpestelos/pagasa-pp-cli/issues/21)).
 - **install.sh**: harden fail-closed path under `set -euo pipefail` (awk field match + loud `die` on missing entry); soft-skip prebuilt when no digest tool; reject non-regular (symlink) extract members; `go install` installs CLI and MCP ([#32](https://github.com/ngpestelos/pagasa-pp-cli/pull/32)).
-- **now / digest**: drop false `mcp:read-only` annotations — both always `saveSnapshot` into local SQLite after live fetch; do not use `mcp:local-write` (would force `openWorldHint=false` while still scraping PAGASA) ([#33](https://github.com/ngpestelos/pagasa-pp-cli/pull/33), [#23](https://github.com/ngpestelos/pagasa-pp-cli/issues/23)).
 
 ### Fixed
 
 - **docs**: document `obs --capture` vs `--limit` footgun in README ([#20](https://github.com/ngpestelos/pagasa-pp-cli/issues/20)).
+
+<!-- Open work lands here in the same PR as the code. Example: #33 (now/digest MCP annotations) when it merges. -->
 
 ---
 
@@ -74,20 +75,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- Release: drop deprecated `brews:` / homebrew tap from GoReleaser (failed CI when tap repo missing).
-- Release: prebuilt binaries in CI; installer downloads instead of compiling on fleet hosts.
-
-### Added
-
-- One-shot fleet installer (`scripts/install.sh`).
+- Release: drop deprecated `brews:` / homebrew tap from GoReleaser (failed CI when tap repo missing; red run even when binaries uploaded).
 
 ---
 
 ## [0.1.1] - 2026-07-23
 
+### Added
+
+- One-shot fleet installer (`scripts/install.sh`); prefers prebuilt release tarball over on-host compile.
+
 ### Fixed
 
-- Patch / packaging follow-ups after first public tag (see git history between v0.1.0 and v0.1.1).
+- Release: prebuilt binaries via goreleaser CI for fleet download (avoid compiling `modernc.org/sqlite` on small hosts).
+- Release: full-module ldflags path so released binaries embed `--version` correctly.
 
 ---
 
