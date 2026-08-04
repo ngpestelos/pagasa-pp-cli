@@ -35,6 +35,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **install.sh**: harden fail-closed path under `set -euo pipefail` (awk field match + loud `die` on missing entry); soft-skip prebuilt when no digest tool; reject non-regular (symlink) extract members; `go install` installs CLI and MCP ([#32](https://github.com/ngpestelos/pagasa-pp-cli/pull/32)).
 - **HTTP client**: on cross-host redirects, strip `Authorization`, `Cookie`, `Proxy-Authorization`, and every `Config.Headers` key so custom API-key headers are not forwarded to an unexpected host ([#22](https://github.com/ngpestelos/pagasa-pp-cli/issues/22)).
 - **store OpenReadOnly**: build `file:` DSN via `url.URL` so path characters like `#` cannot strip `mode=ro`; reject paths containing `?` (cannot open safely under modernc) ([#28](https://github.com/ngpestelos/pagasa-pp-cli/issues/28)).
+- **pagasa-pp-mcp HTTP transport**: default bind `127.0.0.1:7777` (not all interfaces); require bearer token (`--token` or `PP_MCP_TOKEN`); refuse non-loopback bind without `--allow-remote` ([#26](https://github.com/ngpestelos/pagasa-pp-cli/issues/26)).
 
 ### Fixed
 

@@ -30,6 +30,23 @@ An MCP server binary is also available for IDE/desktop agents:
 go install github.com/ngpestelos/pagasa-pp-cli/cmd/pagasa-pp-mcp@latest
 ```
 
+Default transport is **stdio** (no listening socket). Streamable HTTP is
+opt-in and fail-closed:
+
+```bash
+# loopback only; bearer required
+export PP_MCP_TOKEN="$(openssl rand -hex 32)"
+pagasa-pp-mcp --transport http --token "$PP_MCP_TOKEN"
+# endpoint: http://127.0.0.1:7777/mcp
+# clients must send: Authorization: Bearer $PP_MCP_TOKEN
+
+# non-loopback bind (LAN/container) still needs a token
+pagasa-pp-mcp --transport http --addr 0.0.0.0:7777 --allow-remote --token "$PP_MCP_TOKEN"
+```
+
+Without `--token` / `PP_MCP_TOKEN`, HTTP mode exits before listen. Without
+`--allow-remote`, non-loopback `--addr` (including bare `:7777`) is rejected.
+
 ## Quick Start
 
 ```bash
