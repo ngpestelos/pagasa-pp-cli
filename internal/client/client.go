@@ -151,19 +151,52 @@ func (c *Client) LastContentType() string {
 }
 
 // APIError carries HTTP status information for structured exit codes.
+//
+// Body may hold a truncated, credential-masked upstream snippet for
+// local diagnostics (e.g. doctor interstitial detection). It must NOT
+// appear in Error(): machine channels (--json/--agent/MCP) and Cobra
+// stderr all surface err.Error(), and full HTML/WAF bodies are token
+// noise and potential sensitive edge content (#27).
 type APIError struct {
 	Method     string
 	Path       string
 	StatusCode int
-	Body       string
+	Body       string // diagnostic only; never part of Error()
 }
 
+// Error returns method, path, status, and a short class — never the
+// upstream response body. Callers that need the body must read e.Body
+// explicitly (and keep it out of agent/MCP envelopes).
 func (e *APIError) Error() string {
+	if e == nil {
+		return "API error"
+	}
 	msg := fmt.Sprintf("%s %s returned HTTP %d", e.Method, e.Path, e.StatusCode)
-	if strings.TrimSpace(e.Body) != "" {
-		msg += ": " + e.Body
+	if class := httpStatusClass(e.StatusCode); class != "" {
+		msg += " (" + class + ")"
 	}
 	return msg
+}
+
+// httpStatusClass is a short, stable label for agent-facing errors.
+// It does not include upstream text.
+func httpStatusClass(code int) string {
+	switch {
+	case code == http.StatusUnauthorized || code == http.StatusForbidden:
+		return "auth/permission"
+	case code == http.StatusNotFound:
+		return "not found"
+	case code == http.StatusTooManyRequests:
+		return "rate limited"
+	case code == http.StatusConflict:
+		return "conflict"
+	case code >= 500 && code <= 599:
+		return "upstream server error"
+	case code >= 400 && code <= 499:
+		return "upstream client error"
+	default:
+		return ""
+	}
 }
 
 func rejectUnresolvedPathParams(path string, allowedTemplateVars map[string]string) error {
