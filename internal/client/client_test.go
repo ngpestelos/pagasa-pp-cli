@@ -20,6 +20,54 @@ import (
 	"github.com/ngpestelos/pagasa-pp-cli/internal/platform"
 )
 
+func TestAPIError_ErrorOmitsBody(t *testing.T) {
+	t.Parallel()
+
+	html := "<!DOCTYPE html><html><body>" + strings.Repeat("WAF challenge page noise ", 200) + "</body></html>"
+	err := &APIError{
+		Method:     "GET",
+		Path:       "https://www.pagasa.dost.gov.ph/weather",
+		StatusCode: 503,
+		Body:       html,
+	}
+	msg := err.Error()
+	if strings.Contains(msg, "WAF") || strings.Contains(msg, "<!DOCTYPE") || strings.Contains(msg, "<html") {
+		t.Fatalf("Error() leaked body content: %q", msg)
+	}
+	if !strings.Contains(msg, "HTTP 503") {
+		t.Fatalf("Error() missing status: %q", msg)
+	}
+	if !strings.Contains(msg, "upstream server error") {
+		t.Fatalf("Error() missing class: %q", msg)
+	}
+	// Body field still available for doctor-style diagnostics.
+	if err.Body != html {
+		t.Fatalf("Body field should retain diagnostic snippet")
+	}
+}
+
+func TestAPIError_ErrorClasses(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		code int
+		want string
+	}{
+		{401, "auth/permission"},
+		{403, "auth/permission"},
+		{404, "not found"},
+		{409, "conflict"},
+		{429, "rate limited"},
+		{400, "upstream client error"},
+		{502, "upstream server error"},
+	}
+	for _, tc := range cases {
+		msg := (&APIError{Method: "GET", Path: "/x", StatusCode: tc.code}).Error()
+		if !strings.Contains(msg, tc.want) {
+			t.Errorf("HTTP %d: got %q, want class %q", tc.code, msg, tc.want)
+		}
+	}
+}
+
 func TestTruncateBody(t *testing.T) {
 	t.Parallel()
 

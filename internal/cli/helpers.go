@@ -9,12 +9,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/ngpestelos/pagasa-pp-cli/internal/client"
+	"github.com/ngpestelos/pagasa-pp-cli/internal/cliutil"
+	"github.com/ngpestelos/pagasa-pp-cli/internal/platform"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"io"
 	"os"
-	"github.com/ngpestelos/pagasa-pp-cli/internal/cliutil"
-	"github.com/ngpestelos/pagasa-pp-cli/internal/platform"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -212,10 +213,17 @@ func writeAPIErrorEnvelope(flags *rootFlags, err error, code int) {
 	if flags == nil || !flags.asJSON {
 		return
 	}
-	_ = json.NewEncoder(os.Stdout).Encode(map[string]any{
+	// Machine envelope: status + short message only. Never embed
+	// client.APIError.Body (HTML/WAF dumps) — see #27.
+	payload := map[string]any{
 		"error": err.Error(),
 		"code":  code,
-	})
+	}
+	var api *client.APIError
+	if errors.As(err, &api) && api != nil {
+		payload["status"] = api.StatusCode
+	}
+	_ = json.NewEncoder(os.Stdout).Encode(payload)
 }
 
 // classifyAPIError maps API errors to structured exit codes with actionable hints.
