@@ -210,3 +210,91 @@ func TestGetWithHeadersValuesPreservesRepeatedQueryParams(t *testing.T) {
 		t.Fatalf("GetWithHeadersValues returned error: %v", err)
 	}
 }
+
+// TestCrossHostRedirectStripsSensitiveHeaders is the #22 regression: Config.Headers
+// (custom API keys) must not follow a cross-host 3xx. Same-host hops keep them and
+// re-attach Authorization via CheckRedirect.
+func TestCrossHostRedirectStripsSensitiveHeaders(t *testing.T) {
+	t.Parallel()
+
+	var targetHeaders http.Header
+	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		targetHeaders = r.Header.Clone()
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"ok":true}`))
+	}))
+	t.Cleanup(target.Close)
+
+	origin := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, target.URL+"/final", http.StatusFound)
+	}))
+	t.Cleanup(origin.Close)
+
+	cfg := &config.Config{
+		BaseURL:       origin.URL,
+		AuthHeaderVal: "Bearer secret-token",
+		Headers: map[string]string{
+			"X-Api-Key":     "custom-secret",
+			"X-Client-Auth": "another-secret",
+		},
+	}
+	// Use New()'s HTTPClient so CheckRedirect runs; do not replace with origin.Client()
+	// (single-host jar would not exercise cross-host hop stripping).
+	c := New(cfg, time.Second, 0)
+	c.NoCache = true
+
+	if _, err := c.Get(context.Background(), "/start", nil); err != nil {
+		t.Fatalf("Get after cross-host redirect: %v", err)
+	}
+	if targetHeaders == nil {
+		t.Fatal("redirect target never received a request")
+	}
+	if got := targetHeaders.Get("Authorization"); got != "" {
+		t.Errorf("Authorization forwarded to cross-host target: %q", got)
+	}
+	if got := targetHeaders.Get("X-Api-Key"); got != "" {
+		t.Errorf("X-Api-Key forwarded to cross-host target: %q", got)
+	}
+	if got := targetHeaders.Get("X-Client-Auth"); got != "" {
+		t.Errorf("X-Client-Auth forwarded to cross-host target: %q", got)
+	}
+}
+
+func TestSameHostRedirectKeepsAuthAndCustomHeaders(t *testing.T) {
+	t.Parallel()
+
+	var finalHeaders http.Header
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/start" {
+			http.Redirect(w, r, "/final", http.StatusFound)
+			return
+		}
+		finalHeaders = r.Header.Clone()
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"ok":true}`))
+	}))
+	t.Cleanup(server.Close)
+
+	cfg := &config.Config{
+		BaseURL:       server.URL,
+		AuthHeaderVal: "Bearer same-host-token",
+		Headers: map[string]string{
+			"X-Api-Key": "same-host-key",
+		},
+	}
+	c := New(cfg, time.Second, 0)
+	c.NoCache = true
+
+	if _, err := c.Get(context.Background(), "/start", nil); err != nil {
+		t.Fatalf("Get after same-host redirect: %v", err)
+	}
+	if finalHeaders == nil {
+		t.Fatal("same-host final hop never received a request")
+	}
+	if got := finalHeaders.Get("Authorization"); got != "Bearer same-host-token" {
+		t.Errorf("Authorization = %q, want Bearer same-host-token", got)
+	}
+	if got := finalHeaders.Get("X-Api-Key"); got != "same-host-key" {
+		t.Errorf("X-Api-Key = %q, want same-host-key", got)
+	}
+}
