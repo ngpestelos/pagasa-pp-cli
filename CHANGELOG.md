@@ -28,6 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+- **MCP teach/playbook**: under MCP surface, reject `--db` and `--playbook-file` / `--notes-file` paths outside app data/state dirs (CLI TTY keeps full path flexibility; prefer `--playbook-json` / `--notes` inline) ([#30](https://github.com/ngpestelos/pagasa-pp-cli/issues/30)).
 - **store ListLearnings**: LIKE filter uses `ESCAPE '\\'` + `escapeLike` so `%`/`_` in the query needle are literals (bound params; not SQLi) ([#29](https://github.com/ngpestelos/pagasa-pp-cli/issues/29)).
 - **MCP novel tools**: set `openWorldHint` for network scrapers via `mcp:open-world` (storm/forecast/watch/approach/weather/now/digest/obs); local read-only tools get `openWorldHint=false` so hosts do not over-approve PAGASA HTTP as local-only reads ([#24](https://github.com/ngpestelos/pagasa-pp-cli/issues/24)).
 - **MCP shell-out**: block root `--rate-limit` on mirrored Cobra tools so agents cannot pass `--rate-limit 0` and disable polite HTTP pacing (typed tools already hardcode rate 2) ([#25](https://github.com/ngpestelos/pagasa-pp-cli/issues/25)).

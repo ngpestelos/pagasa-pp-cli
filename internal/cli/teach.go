@@ -222,7 +222,12 @@ Disabling: pass --no-learn or set ` + noLearnEnvVar + `=true.`,
 				fmt.Fprintf(cmd.ErrOrStderr(),
 					"warning: teach query matches the %s PII rule; teach structural queries with identifiers stripped (recorded anyway)\n", rule)
 			}
-			dbPath = learnDBPath(dbPath)
+			resolvedDB, dbErr := resolveLearnDBPath(dbPath)
+			if dbErr != nil {
+				writeTeachErrLog(fmt.Sprintf("teach: %v", dbErr))
+				return silentCodeErr(1)
+			}
+			dbPath = resolvedDB
 			s, err := store.OpenWithContext(cmd.Context(), dbPath)
 			if err != nil {
 				writeTeachErrLog(fmt.Sprintf("teach: open db: %v", err))
@@ -492,7 +497,11 @@ when learnings exist.`,
 				}
 				return emitRecall(cmd, flags, envelope)
 			}
-			dbPath = learnDBPath(dbPath)
+			resolvedDB, dbErr := resolveLearnDBPath(dbPath)
+			if dbErr != nil {
+				return dbErr
+			}
+			dbPath = resolvedDB
 			s, err := store.OpenWithContext(cmd.Context(), dbPath)
 			if err != nil {
 				return fmt.Errorf("recall: %w", err)
@@ -728,7 +737,11 @@ func newLearningsListCmd(flags *rootFlags) *cobra.Command {
 				return nil
 			}
 
-			dbPath = learnDBPath(dbPath)
+			resolvedDB, dbErr := resolveLearnDBPath(dbPath)
+			if dbErr != nil {
+				return dbErr
+			}
+			dbPath = resolvedDB
 			s, err := store.OpenWithContext(cmd.Context(), dbPath)
 			if err != nil {
 				return fmt.Errorf("learnings list: %w", err)
@@ -810,7 +823,11 @@ Requires at least one of --resource, --action, or --all.`,
 				return nil
 			}
 			query := strings.Join(args, " ")
-			dbPath = learnDBPath(dbPath)
+			resolvedDB, dbErr := resolveLearnDBPath(dbPath)
+			if dbErr != nil {
+				return dbErr
+			}
+			dbPath = resolvedDB
 			s, err := store.OpenWithContext(cmd.Context(), dbPath)
 			if err != nil {
 				return fmt.Errorf("learnings forget: %w", err)
@@ -923,7 +940,11 @@ a whole family.`,
 			if strategy == "" {
 				strategy = patterns.StrategySubstitute
 			}
-			dbPath = learnDBPath(dbPath)
+			resolvedDB, dbErr := resolveLearnDBPath(dbPath)
+			if dbErr != nil {
+				return dbErr
+			}
+			dbPath = resolvedDB
 			s, err := store.OpenWithContext(cmd.Context(), dbPath)
 			if err != nil {
 				return fmt.Errorf("teach-pattern: %w", err)
@@ -1004,7 +1025,11 @@ cannot be taught — they are derived from the canonical input.`,
 			if lookups.IsComputedKind(kind) {
 				return usageErr(fmt.Errorf("--kind %q is a computed kind and cannot be taught", kind))
 			}
-			dbPath = learnDBPath(dbPath)
+			resolvedDB, dbErr := resolveLearnDBPath(dbPath)
+			if dbErr != nil {
+				return dbErr
+			}
+			dbPath = resolvedDB
 			s, err := store.OpenWithContext(cmd.Context(), dbPath)
 			if err != nil {
 				return fmt.Errorf("teach-lookup: %w", err)
