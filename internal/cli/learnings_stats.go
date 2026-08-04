@@ -65,7 +65,11 @@ local-only: events never leave this machine.`,
 			if dryRunOK(flags) {
 				return nil
 			}
-			s, err := store.OpenWithContext(cmd.Context(), learnDBPath(dbPath))
+			dbResolved, dbErr := resolveLearnDBPath(dbPath)
+			if dbErr != nil {
+				return dbErr
+			}
+			s, err := store.OpenWithContext(cmd.Context(), dbResolved)
 			if err != nil {
 				return fmt.Errorf("learnings stats: %w", err)
 			}

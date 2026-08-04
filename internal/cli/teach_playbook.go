@@ -94,7 +94,11 @@ agents can record playbooks without a file on disk.`,
 			}
 
 			normalized := learn.Normalize(query, learnCfg)
-			dbPath = learnDBPath(dbPath)
+			resolvedDB, dbErr := resolveLearnDBPath(dbPath)
+			if dbErr != nil {
+				return dbErr
+			}
+			dbPath = resolvedDB
 			s, err := store.OpenWithContext(cmd.Context(), dbPath)
 			if err != nil {
 				return fmt.Errorf("teach-playbook: open db: %w", err)
@@ -220,7 +224,11 @@ Disabling: pass --no-learn or set ` + noLearnEnvVar + `=true.`,
 				return silentCodeErr(2)
 			}
 
-			dbPath = learnDBPath(dbPath)
+			resolvedDB, dbErr := resolveLearnDBPath(dbPath)
+			if dbErr != nil {
+				return dbErr
+			}
+			dbPath = resolvedDB
 			s, err := store.OpenWithContext(cmd.Context(), dbPath)
 			if err != nil {
 				writeTeachErrLog(fmt.Sprintf("playbook amend: open db: %v", err))
@@ -293,7 +301,11 @@ func newPlaybookListCmd(flags *rootFlags) *cobra.Command {
 			if dryRunOK(flags) {
 				return nil
 			}
-			dbPath = learnDBPath(dbPath)
+			resolvedDB, dbErr := resolveLearnDBPath(dbPath)
+			if dbErr != nil {
+				return dbErr
+			}
+			dbPath = resolvedDB
 			s, err := store.OpenWithContext(cmd.Context(), dbPath)
 			if err != nil {
 				return fmt.Errorf("playbook list: %w", err)
@@ -356,6 +368,12 @@ func resolveInlinePlaybook(playbookInline string) (string, error) {
 // --notes-file). Returns (playbookJSON, notesText, error). Either
 // output may be empty; the caller validates at-least-one-non-empty.
 func resolvePlaybookInputs(playbookFile, notesInline, notesFile string) (string, string, error) {
+	if err := rejectPathOutsideMCPAppDirs(playbookFile, "--playbook-file"); err != nil {
+		return "", "", err
+	}
+	if err := rejectPathOutsideMCPAppDirs(notesFile, "--notes-file"); err != nil {
+		return "", "", err
+	}
 	var playbookJSON string
 	if strings.TrimSpace(playbookFile) != "" {
 		// Validate that it parses as a Playbook; reject garbage early.

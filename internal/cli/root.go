@@ -574,7 +574,11 @@ func deriveFlagCorrections(flags *rootFlags, rootCmd, executed *cobra.Command) {
 	// a correction, so framework-only invocations never create the
 	// learn database from this path.
 	openStore := func() (learn.CandidateStore, error) {
-		return store.Open(learnDBPath(""))
+		p, err := resolveLearnDBPath("")
+	if err != nil {
+		return nil, err
+	}
+	return store.Open(p)
 	}
 	_ = learn.DeriveFlagCorrections(openStore, flagExists)
 }

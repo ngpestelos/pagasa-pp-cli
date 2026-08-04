@@ -136,7 +136,11 @@ alter command behavior or recall's verified results on their own.`,
 			if dryRunOK(flags) {
 				return nil
 			}
-			s, err := store.OpenWithContext(cmd.Context(), learnDBPath(dbPath))
+			dbResolved, dbErr := resolveLearnDBPath(dbPath)
+			if dbErr != nil {
+				return dbErr
+			}
+			s, err := store.OpenWithContext(cmd.Context(), dbResolved)
 			if err != nil {
 				return fmt.Errorf("learnings candidates: %w", err)
 			}
@@ -212,7 +216,11 @@ Usage errors (unknown id, non-open status) exit 2.`,
 			if err != nil {
 				return usageErr(fmt.Errorf("learnings confirm: %w", err))
 			}
-			s, err := store.OpenWithContext(cmd.Context(), learnDBPath(dbPath))
+			dbResolved, dbErr := resolveLearnDBPath(dbPath)
+			if dbErr != nil {
+				return dbErr
+			}
+			s, err := store.OpenWithContext(cmd.Context(), dbResolved)
 			if err != nil {
 				return fmt.Errorf("learnings confirm: %w", err)
 			}
@@ -417,7 +425,11 @@ Usage errors (unknown id, no-reject-path candidates) exit 2.`,
 			if err != nil {
 				return usageErr(fmt.Errorf("learnings reject: %w", err))
 			}
-			s, err := store.OpenWithContext(cmd.Context(), learnDBPath(dbPath))
+			dbResolved, dbErr := resolveLearnDBPath(dbPath)
+			if dbErr != nil {
+				return dbErr
+			}
+			s, err := store.OpenWithContext(cmd.Context(), dbResolved)
 			if err != nil {
 				return fmt.Errorf("learnings reject: %w", err)
 			}
@@ -491,7 +503,11 @@ purge also clears stale candidates nobody judged.`,
 			if dryRunOK(flags) {
 				return nil
 			}
-			s, err := store.OpenWithContext(cmd.Context(), learnDBPath(dbPath))
+			dbResolved, dbErr := resolveLearnDBPath(dbPath)
+			if dbErr != nil {
+				return dbErr
+			}
+			s, err := store.OpenWithContext(cmd.Context(), dbResolved)
 			if err != nil {
 				return fmt.Errorf("learnings purge: %w", err)
 			}
