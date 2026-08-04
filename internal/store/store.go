@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"hash/fnv"
 	"math"
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -117,7 +118,10 @@ func OpenReadOnly(dbPath string) (*Store, error) {
 // OpenReadOnlyContext is OpenReadOnly with a caller-supplied context honored by
 // the driver-init SQLITE_BUSY retry.
 func OpenReadOnlyContext(ctx context.Context, dbPath string) (*Store, error) {
-	dsn := "file:" + dbPath + "?mode=ro&_pragma=busy_timeout(5000)&_pragma=foreign_keys(ON)&_pragma=temp_store(MEMORY)&_pragma=mmap_size(268435456)"
+	dsn, err := readOnlySQLiteDSN(dbPath)
+	if err != nil {
+		return nil, err
+	}
 	if err := ensureSQLiteDriverInitialized(ctx, dsn); err != nil {
 		return nil, err
 	}
@@ -128,6 +132,41 @@ func OpenReadOnlyContext(ctx context.Context, dbPath string) (*Store, error) {
 	}
 	db.SetMaxOpenConns(2)
 	return &Store{db: db, path: dbPath}, nil
+}
+
+// readOnlySQLiteDSN builds a modernc.org/sqlite file: URI with mode=ro and the
+// standard read-only pragmas (security review #19 F8 / issue #28).
+//
+// Naive "file:"+path+"?mode=ro&..." treats the first ? in the path as the query
+// start and can drop mode=ro. Building via url.URL keeps RawQuery intact and
+// percent-encodes path characters such as # (which modernc opens correctly).
+// Paths containing "?" are rejected: modernc.org/sqlite cannot open a path
+// that percent-encodes "?" as %3F, and leaving "?" unescaped loses mode=ro.
+func readOnlySQLiteDSN(dbPath string) (string, error) {
+	if err := rejectSQLiteURIUnsafePath(dbPath); err != nil {
+		return "", err
+	}
+	return sqliteFileURI(dbPath, "mode=ro&_pragma=busy_timeout(5000)&_pragma=foreign_keys(ON)&_pragma=temp_store(MEMORY)&_pragma=mmap_size(268435456)"), nil
+}
+
+// rejectSQLiteURIUnsafePath fails closed on path characters that cannot be
+// represented safely in a modernc file: URI while preserving query parameters.
+func rejectSQLiteURIUnsafePath(dbPath string) error {
+	if strings.Contains(dbPath, "?") {
+		return fmt.Errorf("database path must not contain '?': %q (URI query delimiter; cannot open read-only safely)", dbPath)
+	}
+	return nil
+}
+
+// sqliteFileURI builds a file: DSN with RawQuery applied as URI query parameters.
+// Path uses filepath.ToSlash so Windows paths remain a single URI path segment.
+// Caller must have rejected paths that cannot be represented (see rejectSQLiteURIUnsafePath).
+func sqliteFileURI(dbPath, rawQuery string) string {
+	return (&url.URL{
+		Scheme:   "file",
+		Path:     filepath.ToSlash(dbPath),
+		RawQuery: rawQuery,
+	}).String()
 }
 
 // OpenWithContext opens or creates the SQLite store at dbPath. The
@@ -191,7 +230,10 @@ func rejectNewerSchemaBeforeWAL(ctx context.Context, dbPath string) error {
 	if err != nil {
 		return fmt.Errorf("stating database for schema preflight: %w", err)
 	}
-	probe, err := sql.Open("sqlite", "file:"+filepath.ToSlash(dbPath)+"?mode=ro&_pragma=busy_timeout(1000)")
+	if err := rejectSQLiteURIUnsafePath(dbPath); err != nil {
+		return err
+	}
+	probe, err := sql.Open("sqlite", sqliteFileURI(dbPath, "mode=ro&_pragma=busy_timeout(1000)"))
 	if err != nil {
 		return nil
 	}
