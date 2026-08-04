@@ -8,6 +8,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -1357,6 +1358,100 @@ func TestOpenReadOnly_RejectsWrites(t *testing.T) {
 	}
 	if count != 1 {
 		t.Fatalf("CTE SELECT returned %d rows, want 1", count)
+	}
+}
+
+// TestReadOnlySQLiteDSN_EscapesHashAndKeepsMode is the #28 unit pin: # in the
+// path is percent-encoded so mode=ro stays in RawQuery (concat form would treat
+// # as a fragment and drop the query).
+func TestReadOnlySQLiteDSN_EscapesHashAndKeepsMode(t *testing.T) {
+	t.Parallel()
+
+	path := filepath.Join(string(filepath.Separator)+"tmp", "weird#name.db")
+	dsn, err := readOnlySQLiteDSN(path)
+	if err != nil {
+		t.Fatalf("readOnlySQLiteDSN: %v", err)
+	}
+	u, err := url.Parse(dsn)
+	if err != nil {
+		t.Fatalf("parse DSN: %v", err)
+	}
+	if u.Scheme != "file" {
+		t.Fatalf("scheme = %q, want file", u.Scheme)
+	}
+	if got := u.Query().Get("mode"); got != "ro" {
+		t.Fatalf("mode = %q, want ro", got)
+	}
+	if !strings.Contains(u.EscapedPath(), "%23") {
+		t.Fatalf("escaped path %q should percent-encode #", u.EscapedPath())
+	}
+	if !strings.Contains(u.Path, "weird#name") {
+		t.Fatalf("decoded path %q missing weird#name", u.Path)
+	}
+}
+
+func TestReadOnlySQLiteDSN_RejectsQuestionMark(t *testing.T) {
+	t.Parallel()
+
+	path := filepath.Join(string(filepath.Separator)+"tmp", "weird?name.db")
+	_, err := readOnlySQLiteDSN(path)
+	if err == nil {
+		t.Fatal("expected error for path containing ?")
+	}
+	if !strings.Contains(err.Error(), "'?'") {
+		t.Fatalf("error = %v, want mention of ?", err)
+	}
+}
+
+// TestOpenReadOnly_PathWithHash keeps mode=ro when the on-disk path contains #.
+func TestOpenReadOnly_PathWithHash(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "store#data.db")
+
+	rw, err := Open(dbPath)
+	if err != nil {
+		t.Fatalf("seed open: %v", err)
+	}
+	if _, err := rw.DB().Exec(`INSERT INTO resources (id, resource_type, data) VALUES ('seed', 'thing', '{}')`); err != nil {
+		t.Fatalf("seed insert: %v", err)
+	}
+	rw.Close()
+
+	ro, err := OpenReadOnly(dbPath)
+	if err != nil {
+		t.Fatalf("open read-only with # in path: %v", err)
+	}
+	defer ro.Close()
+
+	if _, err := ro.DB().Exec(`INSERT INTO resources (id, resource_type, data) VALUES ('x', 'y', '{}')`); err == nil {
+		t.Fatal("INSERT succeeded under mode=ro for path containing #; DSN likely lost mode=ro")
+	}
+	var count int
+	if err := ro.DB().QueryRow(`SELECT COUNT(*) FROM resources`).Scan(&count); err != nil {
+		t.Fatalf("read-only SELECT failed: %v", err)
+	}
+	if count != 1 {
+		t.Fatalf("count = %d, want 1", count)
+	}
+}
+
+// TestOpenReadOnly_PathWithQuestionMark fails closed rather than opening RW
+// with a broken mode=ro query (modernc cannot open %3F paths).
+func TestOpenReadOnly_PathWithQuestionMark(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "store?data.db")
+
+	rw, err := Open(dbPath)
+	if err != nil {
+		t.Fatalf("seed open: %v", err)
+	}
+	rw.Close()
+
+	ro, err := OpenReadOnly(dbPath)
+	if err == nil {
+		ro.Close()
+		t.Fatal("OpenReadOnly succeeded for path containing ?; want hard reject")
+	}
+	if !strings.Contains(err.Error(), "'?'") {
+		t.Fatalf("error = %v, want mention of ?", err)
 	}
 }
 
