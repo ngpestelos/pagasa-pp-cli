@@ -403,6 +403,13 @@ func (s *Store) UpsertLearning(ctx context.Context, in UpsertLearningInput) (int
 	return id, true, nil
 }
 
+// learningsLikeFilter is the ListLearnings query_pattern substring clause:
+// intentional leading/trailing % wildcards, with %/_/\\ in the needle
+// treated as literals via escapeLike + ESCAPE (F9 / #29).
+func learningsLikeFilter(needle string) (clause string, arg string) {
+	return `query_pattern LIKE ? ESCAPE '\'`, "%" + escapeLike(needle) + "%"
+}
+
 // ListLearningsFilter narrows ListLearnings. Zero values mean unfiltered.
 type ListLearningsFilter struct {
 	Query         string
@@ -421,8 +428,9 @@ func (s *Store) ListLearnings(ctx context.Context, f ListLearningsFilter) ([]Lea
 	clauses := []string{}
 	args := []any{}
 	if f.Query != "" {
-		clauses = append(clauses, "query_pattern LIKE ?")
-		args = append(args, "%"+NormalizeQuery(f.Query)+"%")
+		cl, arg := learningsLikeFilter(NormalizeQuery(f.Query))
+		clauses = append(clauses, cl)
+		args = append(args, arg)
 	}
 	if f.Source != "" {
 		clauses = append(clauses, "source = ?")
